@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    background-color: theme('colors.bg');
+    color: theme('colors.text');
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  input, button, select, textarea {
+    font: inherit;
+    color: inherit;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  /* Force dark color scheme on date pickers so the native calendar matches the dark UI */
+  input[type='date'] {
+    color-scheme: dark;
+  }
+  ::selection {
+    background: theme('colors.elev');
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full bg-bg border border-border rounded-md px-3 py-2 text-text placeholder:text-muted focus:outline-none focus:border-subtle transition-colors;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium border border-border bg-elev text-text hover:bg-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium bg-text text-bg hover:bg-subtle transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-subtle hover:text-text hover:bg-elev transition-colors;
+  }
+  .card {
+    @apply bg-surface border border-border rounded-lg;
+  }
+}
