@@ -1,10 +1,10 @@
 import { NavLink } from 'react-router-dom'
 
 const tabs = [
-  { to: '/',        label: 'Dashboard', icon: IconHome },
-  { to: '/add',     label: 'Add',       icon: IconPlus },
-  { to: '/history', label: 'History',   icon: IconHistory },
-  { to: '/settings',label: 'Settings',  icon: IconSettings }
+  { to: '/',             label: 'Dashboard',     icon: IconHome },
+  { to: '/accounts',     label: 'Accounts',      icon: IconAccounts },
+  { to: '/subscriptions',label: 'Subscriptions', icon: IconSubs },
+  { to: '/settings',     label: 'Settings',      icon: IconSettings }
 ]
 
 export function BottomNav() {
@@ -40,22 +40,22 @@ function IconHome() {
   )
 }
 
-function IconPlus() {
+function IconAccounts() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9"/>
-      <line x1="12" y1="8" x2="12" y2="16"/>
-      <line x1="8" y1="12" x2="16" y2="12"/>
+      <rect x="2" y="5" width="20" height="14" rx="2"/>
+      <line x1="2" y1="10" x2="22" y2="10"/>
     </svg>
   )
 }
 
-function IconHistory() {
+function IconSubs() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="12 8 12 12 14 14"/>
-      <path d="M3.05 11a9 9 0 1 0 .5-4.5"/>
-      <polyline points="3 3 3 9 9 9"/>
+      <polyline points="17 1 21 5 17 9"/>
+      <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+      <polyline points="7 23 3 19 7 15"/>
+      <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
     </svg>
   )
 }

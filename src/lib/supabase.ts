@@ -3,41 +3,57 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-// True only when real (non-placeholder) credentials are present.
-// App.tsx checks this flag and renders a setup screen instead of crashing.
 export const isSupabaseConfigured =
   Boolean(supabaseUrl) &&
   Boolean(supabaseAnonKey) &&
   !supabaseUrl.startsWith('https://your-project')
 
-// Create a real client only when configured; otherwise use a stub that satisfies
-// the type so the rest of the module can import without throwing at module load.
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : createClient('https://placeholder.supabase.co', 'placeholder-key')
 
-export type Category =
-  | 'housing_utilities'
-  | 'food_groceries'
-  | 'transport'
-  | 'entertainment'
-  | 'subscriptions'
-  | 'savings_investments'
+export type AccountType = 'credit_card' | 'checking' | 'savings' | 'investment'
+export type Bucket     = 'needs' | 'wants' | 'savings'
+export type SubCadence = 'weekly' | 'monthly' | 'yearly'
 
-export interface Transaction {
+export interface Profile {
+  user_id: string
+  paycheck_cents: number
+  needs_pct: number
+  wants_pct: number
+  savings_pct: number
+  cycle_anchor_date: string
+  updated_at: string
+}
+
+export interface Account {
   id: string
   user_id: string
-  amount_cents: number
-  category: Category
-  occurred_on: string
-  note: string | null
-  client_id: string
+  name: string
+  type: AccountType
+  credit_limit_cents: number | null
+  sort_order: number
+  archived: boolean
   created_at: string
 }
 
-export interface CategoryTarget {
+export interface BalanceSnapshot {
+  id: string
+  account_id: string
   user_id: string
-  category: Category
-  target_cents: number
-  updated_at: string
+  balance_cents: number
+  recorded_at: string
+}
+
+export interface Subscription {
+  id: string
+  user_id: string
+  name: string
+  amount_cents: number
+  cadence: SubCadence
+  next_charge_on: string
+  bucket: Bucket
+  active: boolean
+  sort_order: number
+  created_at: string
 }

@@ -4,8 +4,8 @@ import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { SignIn } from './auth/SignIn'
 import { AuthCallback } from './auth/AuthCallback'
 import { Dashboard } from './pages/Dashboard'
-import { AddTransaction } from './pages/AddTransaction'
-import { History } from './pages/History'
+import { Accounts } from './pages/Accounts'
+import { Subscriptions } from './pages/Subscriptions'
 import { Settings } from './pages/Settings'
 import { BottomNav } from './components/BottomNav'
 import { queryClient } from './lib/queryClient'
@@ -34,12 +34,12 @@ function AppRoutes() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/add" element={<AddTransaction />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/"              element={<Dashboard />} />
+        <Route path="/accounts"      element={<Accounts />} />
+        <Route path="/subscriptions" element={<Subscriptions />} />
+        <Route path="/settings"      element={<Settings />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*"              element={<Navigate to="/" replace />} />
       </Routes>
       <BottomNav />
     </>

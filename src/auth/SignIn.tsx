@@ -29,7 +29,7 @@ export function SignIn() {
         <div className="w-full max-w-sm">
           <div className="card p-8 text-center">
             <p className="text-text font-medium mb-1">Check your inbox</p>
-            <p className="text-subtle text-sm">We sent a login link to <span className="text-text">{email}</span></p>
+            <p className="text-subtle text-sm">A secure sign-in link was sent to <span className="text-text">{email}</span></p>
             <button
               onClick={() => setSent(false)}
               className="mt-6 text-xs text-muted hover:text-subtle transition-colors"
@@ -61,7 +61,7 @@ export function SignIn() {
           />
           {error && <p className="text-danger text-xs">{error}</p>}
           <button type="submit" disabled={loading} className="btn-primary py-2.5">
-            {loading ? 'Sending…' : 'Send magic link'}
+            {loading ? 'Sending…' : 'Send sign-in link'}
           </button>
         </form>
       </div>
