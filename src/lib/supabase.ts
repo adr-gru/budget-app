@@ -32,6 +32,7 @@ export interface Account {
   name: string
   type: AccountType
   credit_limit_cents: number | null
+  due_day: number | null
   sort_order: number
   archived: boolean
   created_at: string
@@ -54,6 +55,18 @@ export interface Subscription {
   next_charge_on: string
   bucket: Bucket
   active: boolean
+  sort_order: number
+  created_at: string
+}
+
+export interface Goal {
+  id: string
+  user_id: string
+  name: string
+  target_cents: number
+  current_cents: number
+  linked_account_id: string | null
+  target_date: string | null
   sort_order: number
   created_at: string
 }

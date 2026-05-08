@@ -22,6 +22,7 @@ export interface AddAccountInput {
   name: string
   type: AccountType
   credit_limit_cents?: number | null
+  due_day?: number | null
 }
 
 export function useAddAccount() {

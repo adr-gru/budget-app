@@ -4,21 +4,23 @@ import { useLatestBalances, useCycleActivitySnapshots, computeActivity } from '.
 import { useProfile } from '../data/profile'
 import { AccountCard } from '../components/AccountCard'
 import { UpdateBalanceSheet } from '../components/UpdateBalanceSheet'
+import { Sheet } from '../components/Sheet'
 import { currentCycleStart, todayISO } from '../lib/cycle'
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_META } from '../lib/accountTypes'
 import { formatMoney, parseCents } from '../lib/money'
 import type { Account, AccountType } from '../lib/supabase'
 
 export function Accounts() {
-  const { data: accounts = [] } = useAccounts()
-  const { data: latestBalances = [] } = useLatestBalances()
-  const { data: profile } = useProfile()
+  const { data: accounts = [] }        = useAccounts()
+  const { data: latestBalances = [] }  = useLatestBalances()
+  const { data: profile }              = useProfile()
 
-  const anchor = profile?.cycle_anchor_date ?? todayISO()
+  const anchor     = profile?.cycle_anchor_date ?? todayISO()
   const cycleStart = currentCycleStart(anchor)
   const { data: activitySnapshots = [] } = useCycleActivitySnapshots(cycleStart)
 
-  const balanceMap = new Map(latestBalances.map(s => [s.account_id, s.balance_cents]))
+  const balanceMap  = new Map(latestBalances.map(s => [s.account_id, s.balance_cents]))
+  const lastUpdatedMap = new Map(latestBalances.map(s => [s.account_id, s.recorded_at]))
   const activityMap = computeActivity(activitySnapshots, cycleStart)
 
   const [balanceTarget, setBalanceTarget] = useState<Account | null>(null)
@@ -29,8 +31,6 @@ export function Accounts() {
     return acc
   }, {} as Record<AccountType, Account[]>)
 
-  const hasAny = accounts.length > 0
-
   return (
     <div className="pb-24">
       <div className="px-4 pt-12 pb-4 border-b border-border flex items-center justify-between">
@@ -40,11 +40,14 @@ export function Accounts() {
         </button>
       </div>
 
-      {!hasAny && (
+      {accounts.length === 0 && (
         <div className="px-4 pt-5">
-          <div className="card px-4 py-4 text-center">
-            <p className="text-sm text-subtle">No accounts yet.</p>
-            <p className="text-xs text-muted mt-1">Add your credit cards, checking, savings, and investment accounts.</p>
+          <div className="card px-4 py-5 text-center">
+            <p className="text-sm text-subtle mb-1">No accounts yet.</p>
+            <p className="text-xs text-muted">Add your credit cards, checking, savings, and investment accounts.</p>
+            <button onClick={() => setShowAdd(true)} className="btn-primary mt-4 px-5 py-2 text-sm">
+              Add first account
+            </button>
           </div>
         </div>
       )}
@@ -52,7 +55,7 @@ export function Accounts() {
       {ACCOUNT_TYPES.map(type => {
         const list = accountsByType[type]
         if (list.length === 0) return null
-        const meta = ACCOUNT_TYPE_META[type]
+        const meta  = ACCOUNT_TYPE_META[type]
         const total = list.reduce((sum, a) => sum + (balanceMap.get(a.id) ?? 0), 0)
 
         return (
@@ -70,6 +73,7 @@ export function Accounts() {
                   account={a}
                   balance={balanceMap.get(a.id) ?? null}
                   delta={activityMap.get(a.id)?.delta ?? null}
+                  lastSnapshotAt={lastUpdatedMap.get(a.id) ?? null}
                   onTap={() => setBalanceTarget(a)}
                 />
               ))}
@@ -78,7 +82,6 @@ export function Accounts() {
         )
       })}
 
-      {/* Update balance sheet */}
       {balanceTarget && (
         <UpdateBalanceSheet
           account={balanceTarget}
@@ -87,29 +90,29 @@ export function Accounts() {
         />
       )}
 
-      {/* Add account sheet */}
-      {showAdd && (
-        <AddAccountSheet onClose={() => setShowAdd(false)} />
-      )}
+      {showAdd && <AddAccountSheet onClose={() => setShowAdd(false)} />}
     </div>
   )
 }
 
 function AddAccountSheet({ onClose }: { onClose: () => void }) {
-  const addAccount = useAddAccount()
+  const addAccount    = useAddAccount()
   const archiveAccount = useArchiveAccount()
   const { data: accounts = [] } = useAccounts()
 
-  const [name, setName]           = useState('')
-  const [type, setType]           = useState<AccountType>('credit_card')
+  const [name,       setName]       = useState('')
+  const [type,       setType]       = useState<AccountType>('credit_card')
   const [limitValue, setLimitValue] = useState('')
+  const [dueDay,     setDueDay]     = useState('')
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const creditLimit = type === 'credit_card' && limitValue
-      ? parseCents(limitValue)
-      : null
-    await addAccount.mutateAsync({ name: name.trim(), type, credit_limit_cents: creditLimit })
+    await addAccount.mutateAsync({
+      name: name.trim(),
+      type,
+      credit_limit_cents: type === 'credit_card' && limitValue ? parseCents(limitValue) : null,
+      due_day: type === 'credit_card' && dueDay ? Number(dueDay) : null
+    })
     onClose()
   }
 
@@ -119,51 +122,43 @@ function AddAccountSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
-      <div
-        className="fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border rounded-t-xl px-4 pt-5 overflow-y-auto"
-        style={{ maxHeight: '85vh', paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
-      >
-        <p className="text-base font-semibold text-text mb-5">Add account</p>
+    <Sheet onClose={onClose} title="Add account" maxHeight="90vh">
+      <form onSubmit={submit} className="px-4 flex flex-col gap-4 pb-4">
+        <div>
+          <label className="text-xs text-muted block mb-1.5">Account name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. Chase Freedom, Vanguard"
+            required
+            autoFocus
+            className="field"
+          />
+        </div>
 
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <div>
-            <label className="text-xs text-muted block mb-1.5">Account name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. Chase Freedom, Vanguard"
-              required
-              autoFocus
-              className="field"
-            />
+        <div>
+          <label className="text-xs text-muted block mb-1.5">Type</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {ACCOUNT_TYPES.map(t => {
+              const meta = ACCOUNT_TYPE_META[t]
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className={`card px-3 py-2.5 text-left text-sm transition-colors ${type === t ? 'border-2' : ''}`}
+                  style={type === t ? { borderColor: meta.color, color: meta.color } : {}}
+                >
+                  {meta.label}
+                </button>
+              )
+            })}
           </div>
+        </div>
 
-          <div>
-            <label className="text-xs text-muted block mb-1.5">Type</label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {ACCOUNT_TYPES.map(t => {
-                const meta = ACCOUNT_TYPE_META[t]
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setType(t)}
-                    className={`card px-3 py-2.5 text-left text-sm transition-colors ${
-                      type === t ? 'border-2' : ''
-                    }`}
-                    style={type === t ? { borderColor: meta.color, color: meta.color } : {}}
-                  >
-                    {meta.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {type === 'credit_card' && (
+        {type === 'credit_card' && (
+          <>
             <div>
               <label className="text-xs text-muted block mb-1.5">Credit limit (optional)</label>
               <div className="relative">
@@ -180,36 +175,45 @@ function AddAccountSheet({ onClose }: { onClose: () => void }) {
                 />
               </div>
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={addAccount.isPending || !name.trim()}
-            className="btn-primary py-3 mt-1"
-          >
-            {addAccount.isPending ? 'Adding…' : 'Add account'}
-          </button>
-        </form>
-
-        {/* Archive existing accounts */}
-        {accounts.length > 0 && (
-          <div className="mt-6 mb-2">
-            <p className="text-xs text-muted mb-3 uppercase tracking-wider">Archive account</p>
-            <div className="flex flex-col gap-1">
-              {accounts.map(a => (
-                <button
-                  key={a.id}
-                  onClick={() => confirmArchive(a)}
-                  className="w-full card px-3 py-2.5 text-left text-sm text-subtle flex items-center justify-between"
-                >
-                  <span>{a.name}</span>
-                  <span className="text-xs text-muted">{ACCOUNT_TYPE_META[a.type].label}</span>
-                </button>
-              ))}
+            <div>
+              <label className="text-xs text-muted block mb-1.5">Payment due day (optional)</label>
+              <p className="text-xs text-muted mb-2">Day of month when payment is due — shows a reminder on your card.</p>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max="31"
+                value={dueDay}
+                onChange={e => setDueDay(e.target.value)}
+                placeholder="e.g. 15"
+                className="field"
+              />
             </div>
-          </div>
+          </>
         )}
-      </div>
-    </>
+
+        <button type="submit" disabled={addAccount.isPending || !name.trim()} className="btn-primary py-3 mt-1">
+          {addAccount.isPending ? 'Adding…' : 'Add account'}
+        </button>
+      </form>
+
+      {accounts.length > 0 && (
+        <div className="px-4 pb-4">
+          <p className="text-xs text-muted mb-3 uppercase tracking-wider">Archive account</p>
+          <div className="flex flex-col gap-1">
+            {accounts.map(a => (
+              <button
+                key={a.id}
+                onClick={() => confirmArchive(a)}
+                className="w-full card px-3 py-2.5 text-left text-sm text-subtle flex items-center justify-between"
+              >
+                <span>{a.name}</span>
+                <span className="text-xs text-muted">{ACCOUNT_TYPE_META[a.type].label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </Sheet>
   )
 }

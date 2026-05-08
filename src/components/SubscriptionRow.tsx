@@ -1,7 +1,8 @@
-import { Subscription } from '../lib/supabase'
+import { differenceInCalendarDays, parseISO, format } from 'date-fns'
+import type { Subscription } from '../lib/supabase'
 import { BUCKET_META } from '../lib/buckets'
 import { formatMoney } from '../lib/money'
-import { format, parseISO } from 'date-fns'
+import { monthlyEquivalentCents } from '../data/subscriptions'
 
 const CADENCE_LABEL: Record<string, string> = {
   weekly:  '/wk',
@@ -17,11 +18,15 @@ interface Props {
 
 export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
   const bucketMeta = BUCKET_META[s.bucket]
+  const nextDate = parseISO(s.next_charge_on)
+  const daysUntil = differenceInCalendarDays(nextDate, new Date())
+  const renewingSoon = daysUntil >= 0 && daysUntil <= 3
+  const annualCents = s.cadence === 'yearly' ? s.amount_cents : monthlyEquivalentCents(s) * 12
 
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-medium text-text truncate">{s.name}</p>
           <span
             className="text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0"
@@ -30,9 +35,17 @@ export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
             {bucketMeta.label}
           </span>
         </div>
-        <p className="text-xs text-muted mt-0.5">
-          Next: {format(parseISO(s.next_charge_on), 'MMM d')}
-        </p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className={`text-xs ${renewingSoon ? 'text-[#fbbf24] font-medium' : 'text-muted'}`}>
+            {renewingSoon && daysUntil === 0
+              ? 'Charges today'
+              : renewingSoon
+              ? `Renews in ${daysUntil}d`
+              : `Next: ${format(nextDate, 'MMM d')}`}
+          </p>
+          <span className="text-xs text-muted">·</span>
+          <p className="text-xs text-muted">{formatMoney(annualCents)}/yr</p>
+        </div>
       </div>
       <span className="text-sm font-semibold tabular-nums text-text flex-shrink-0">
         {formatMoney(s.amount_cents)}

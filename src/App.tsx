@@ -7,9 +7,49 @@ import { Dashboard } from './pages/Dashboard'
 import { Accounts } from './pages/Accounts'
 import { Subscriptions } from './pages/Subscriptions'
 import { Settings } from './pages/Settings'
+import { History } from './pages/History'
+import { Goals } from './pages/Goals'
+import { Onboarding } from './pages/Onboarding'
 import { BottomNav } from './components/BottomNav'
+import { InstallPrompt } from './components/InstallPrompt'
 import { queryClient } from './lib/queryClient'
 import { isSupabaseConfigured } from './lib/supabase'
+import { useProfile } from './data/profile'
+import { useAutoLogout } from './hooks/useAutoLogout'
+
+function AuthenticatedApp() {
+  const { data: profile, isLoading } = useProfile()
+  useAutoLogout()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg">
+        <div className="w-4 h-4 rounded-full border-2 border-border border-t-subtle animate-spin" />
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return <Onboarding />
+  }
+
+  return (
+    <>
+      <InstallPrompt />
+      <Routes>
+        <Route path="/"              element={<Dashboard />} />
+        <Route path="/accounts"      element={<Accounts />} />
+        <Route path="/subscriptions" element={<Subscriptions />} />
+        <Route path="/settings"      element={<Settings />} />
+        <Route path="/history"       element={<History />} />
+        <Route path="/goals"         element={<Goals />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="*"              element={<Navigate to="/" replace />} />
+      </Routes>
+      <BottomNav />
+    </>
+  )
+}
 
 function AppRoutes() {
   const { session, loading } = useAuth()
@@ -31,19 +71,7 @@ function AppRoutes() {
     )
   }
 
-  return (
-    <>
-      <Routes>
-        <Route path="/"              element={<Dashboard />} />
-        <Route path="/accounts"      element={<Accounts />} />
-        <Route path="/subscriptions" element={<Subscriptions />} />
-        <Route path="/settings"      element={<Settings />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="*"              element={<Navigate to="/" replace />} />
-      </Routes>
-      <BottomNav />
-    </>
-  )
+  return <AuthenticatedApp />
 }
 
 function SetupScreen() {
@@ -58,12 +86,7 @@ function SetupScreen() {
         </p>
         <p className="text-xs text-muted">
           Get your credentials at{' '}
-          <a
-            href="https://supabase.com/dashboard"
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-subtle"
-          >
+          <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="underline hover:text-subtle">
             supabase.com/dashboard
           </a>
         </p>
@@ -73,9 +96,7 @@ function SetupScreen() {
 }
 
 export default function App() {
-  if (!isSupabaseConfigured) {
-    return <SetupScreen />
-  }
+  if (!isSupabaseConfigured) return <SetupScreen />
 
   return (
     <QueryClientProvider client={queryClient}>

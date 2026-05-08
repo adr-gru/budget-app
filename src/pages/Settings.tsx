@@ -1,39 +1,29 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useProfile, useUpsertProfile } from '../data/profile'
+import { useAccounts } from '../data/accounts'
+import { useSubscriptions } from '../data/subscriptions'
+import { useGoals } from '../data/goals'
+import { useLatestBalances } from '../data/snapshots'
 import { parseCents, formatDollars, formatMoney } from '../lib/money'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { todayISO } from '../lib/cycle'
+import { exportAccounts, exportSubscriptions, exportGoals, exportSnapshots } from '../lib/export'
 
 function NumberField({
-  label,
-  hint,
-  value,
-  onSave,
-  prefix,
-  suffix,
-  min,
-  max,
-  step = '0.01',
-  placeholder
+  label, hint, value, onSave, prefix, suffix,
+  min, max, step = '0.01', placeholder
 }: {
-  label: string
-  hint?: string
-  value: string
+  label: string; hint?: string; value: string
   onSave: (raw: string) => void
-  prefix?: string
-  suffix?: string
-  min?: string
-  max?: string
-  step?: string
-  placeholder?: string
+  prefix?: string; suffix?: string
+  min?: string; max?: string; step?: string; placeholder?: string
 }) {
   const [local, setLocal] = useState(value)
   const focusRef = useRef(false)
 
-  useEffect(() => {
-    if (!focusRef.current) setLocal(value)
-  }, [value])
+  useEffect(() => { if (!focusRef.current) setLocal(value) }, [value])
 
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
@@ -42,9 +32,7 @@ function NumberField({
         {hint && <p className="text-xs text-muted mt-0.5">{hint}</p>}
       </div>
       <div className="relative w-32 flex-shrink-0">
-        {prefix && (
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">{prefix}</span>
-        )}
+        {prefix && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">{prefix}</span>}
         <input
           type="number"
           inputMode="decimal"
@@ -54,43 +42,38 @@ function NumberField({
           value={local}
           onChange={e => setLocal(e.target.value)}
           onFocus={() => { focusRef.current = true }}
-          onBlur={() => {
-            focusRef.current = false
-            if (local !== value) onSave(local)
-          }}
+          onBlur={() => { focusRef.current = false; if (local !== value) onSave(local) }}
           placeholder={placeholder ?? '0'}
           className={`field text-right tabular-nums text-sm ${prefix ? 'pl-6' : ''} ${suffix ? 'pr-6' : ''}`}
         />
-        {suffix && (
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">{suffix}</span>
-        )}
+        {suffix && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">{suffix}</span>}
       </div>
     </div>
   )
 }
 
 export function Settings() {
+  const navigate = useNavigate()
   const { session } = useAuth()
   const { data: profile } = useProfile()
+  const { data: accounts = [] } = useAccounts()
+  const { data: subs = [] } = useSubscriptions()
+  const { data: goals = [] } = useGoals()
+  const { data: snapshots = [] } = useLatestBalances()
   const upsert = useUpsertProfile()
   const [saved, setSaved] = useState<string | null>(null)
 
-  const paycheck = profile ? formatDollars(profile.paycheck_cents) : '0.00'
+  const paycheck  = profile ? formatDollars(profile.paycheck_cents) : '0.00'
   const needsPct  = String(profile?.needs_pct   ?? 50)
   const wantsPct  = String(profile?.wants_pct   ?? 30)
   const savingsPct = String(profile?.savings_pct ?? 20)
-  const anchor = profile?.cycle_anchor_date ?? todayISO()
-
-  const totalPct = (profile?.needs_pct ?? 50) + (profile?.wants_pct ?? 30) + (profile?.savings_pct ?? 20)
+  const anchor    = profile?.cycle_anchor_date ?? todayISO()
+  const totalPct  = (profile?.needs_pct ?? 50) + (profile?.wants_pct ?? 30) + (profile?.savings_pct ?? 20)
 
   async function save(updates: Parameters<typeof upsert.mutateAsync>[0], key: string) {
     await upsert.mutateAsync(updates)
     setSaved(key)
     setTimeout(() => setSaved(null), 1500)
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut()
   }
 
   return (
@@ -129,61 +112,75 @@ export function Settings() {
           </div>
         </div>
         <div className="card px-4 py-0">
-          <NumberField
-            label="Needs"
-            hint="Housing, food, essentials"
-            value={needsPct}
-            suffix="%"
-            step="1"
-            min="0"
-            max="100"
-            placeholder="50"
-            onSave={raw => save({ needs_pct: Math.round(Number(raw) || 0) }, 'buckets')}
-          />
-          <NumberField
-            label="Wants"
-            hint="Entertainment, subscriptions"
-            value={wantsPct}
-            suffix="%"
-            step="1"
-            min="0"
-            max="100"
-            placeholder="30"
-            onSave={raw => save({ wants_pct: Math.round(Number(raw) || 0) }, 'buckets')}
-          />
-          <NumberField
-            label="Savings"
-            hint="Savings & investments"
-            value={savingsPct}
-            suffix="%"
-            step="1"
-            min="0"
-            max="100"
-            placeholder="20"
-            onSave={raw => save({ savings_pct: Math.round(Number(raw) || 0) }, 'buckets')}
-          />
+          <NumberField label="Needs"   hint="Housing, food, essentials"         value={needsPct}   suffix="%" step="1" min="0" max="100" placeholder="50" onSave={raw => save({ needs_pct:   Math.round(Number(raw) || 0) }, 'buckets')} />
+          <NumberField label="Wants"   hint="Entertainment, subscriptions"       value={wantsPct}   suffix="%" step="1" min="0" max="100" placeholder="30" onSave={raw => save({ wants_pct:   Math.round(Number(raw) || 0) }, 'buckets')} />
+          <NumberField label="Savings" hint="Savings &amp; investments"          value={savingsPct} suffix="%" step="1" min="0" max="100" placeholder="20" onSave={raw => save({ savings_pct: Math.round(Number(raw) || 0) }, 'buckets')} />
         </div>
       </div>
 
-      {/* Cycle anchor */}
+      {/* Pay cycle */}
       <div className="px-4 pt-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs text-muted uppercase tracking-wider">Pay cycle</p>
           {saved === 'anchor' && <span className="text-xs text-success">Saved</span>}
         </div>
-        <div className="card px-4 py-3 flex items-center justify-between">
-          <div>
+        <div className="card px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex-1 min-w-0">
             <p className="text-sm text-text">Cycle start date</p>
             <p className="text-xs text-muted mt-0.5">The date your last pay period began</p>
           </div>
           <input
             type="date"
             defaultValue={anchor}
-            onChange={e => {
-              if (e.target.value) save({ cycle_anchor_date: e.target.value }, 'anchor')
-            }}
-            className="field w-auto text-sm"
+            onChange={e => { if (e.target.value) save({ cycle_anchor_date: e.target.value }, 'anchor') }}
+            className="field w-auto text-sm flex-shrink-0"
           />
+        </div>
+      </div>
+
+      {/* Goals link */}
+      <div className="px-4 pt-5">
+        <p className="text-xs text-muted mb-3 uppercase tracking-wider">Planning</p>
+        <button
+          onClick={() => navigate('/goals')}
+          className="w-full card px-4 py-3 flex items-center justify-between"
+        >
+          <div>
+            <p className="text-sm text-text">Savings goals</p>
+            <p className="text-xs text-muted mt-0.5">{goals.length} goal{goals.length !== 1 ? 's' : ''} active</p>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Data export */}
+      <div className="px-4 pt-5">
+        <p className="text-xs text-muted mb-3 uppercase tracking-wider">Data</p>
+        <div className="card overflow-hidden">
+          {[
+            { label: 'Export accounts', hint: `${accounts.length} account${accounts.length !== 1 ? 's' : ''}`, onClick: () => exportAccounts(accounts) },
+            { label: 'Export subscriptions', hint: `${subs.length} subscription${subs.length !== 1 ? 's' : ''}`, onClick: () => exportSubscriptions(subs) },
+            { label: 'Export balance history', hint: `${snapshots.length} snapshot${snapshots.length !== 1 ? 's' : ''}`, onClick: () => exportSnapshots(snapshots as any[], accounts) },
+            { label: 'Export goals', hint: `${goals.length} goal${goals.length !== 1 ? 's' : ''}`, onClick: () => exportGoals(goals) }
+          ].map(({ label, hint, onClick }) => (
+            <button
+              key={label}
+              onClick={onClick}
+              className="w-full flex items-center justify-between px-4 py-3 border-b border-border last:border-0 text-left"
+            >
+              <div>
+                <p className="text-sm text-text">{label}</p>
+                <p className="text-xs text-muted mt-0.5">{hint}</p>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -194,7 +191,7 @@ export function Settings() {
           <span className="text-sm text-subtle truncate">{session?.user.email}</span>
         </div>
         <button
-          onClick={signOut}
+          onClick={() => supabase.auth.signOut()}
           className="mt-3 w-full btn text-danger hover:text-danger border-border"
         >
           Sign out

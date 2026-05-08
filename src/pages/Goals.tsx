@@ -1,0 +1,307 @@
+import { useState } from 'react'
+import { differenceInCalendarMonths, format, parseISO } from 'date-fns'
+import { useGoals, useAddGoal, useUpdateGoal, useDeleteGoal } from '../data/goals'
+import { useAccounts } from '../data/accounts'
+import { useLatestBalances } from '../data/snapshots'
+import { Sheet } from '../components/Sheet'
+import { formatMoney, parseCents, formatDollars } from '../lib/money'
+import { todayISO } from '../lib/cycle'
+import type { Goal } from '../lib/supabase'
+
+function GoalCard({
+  goal,
+  currentCents,
+  onEdit,
+  onDelete
+}: {
+  goal: Goal
+  currentCents: number
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const progress = goal.target_cents > 0 ? Math.min(currentCents / goal.target_cents, 1) : 0
+  const pct = Math.round(progress * 100)
+  const over = currentCents >= goal.target_cents
+  const remaining = goal.target_cents - currentCents
+
+  const monthsLeft = goal.target_date
+    ? differenceInCalendarMonths(parseISO(goal.target_date), new Date())
+    : null
+
+  return (
+    <div className="card px-4 py-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-text">{goal.name}</p>
+          {goal.target_date && (
+            <p className="text-xs text-muted mt-0.5">
+              {over
+                ? 'Goal reached!'
+                : monthsLeft !== null && monthsLeft >= 0
+                ? `${monthsLeft} month${monthsLeft !== 1 ? 's' : ''} to go · ${format(parseISO(goal.target_date), 'MMM yyyy')}`
+                : `Target: ${format(parseISO(goal.target_date), 'MMM yyyy')}`
+              }
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={onEdit} className="btn-ghost p-1.5">
+            <IconEdit />
+          </button>
+          <button onClick={onDelete} className="btn-ghost p-1.5 text-danger hover:text-danger">
+            <IconTrash />
+          </button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-2 bg-elev rounded-full overflow-hidden mb-2">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: over ? '#34d399' : '#a78bfa' }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted">
+          {over ? '100% complete' : `${pct}% of ${formatMoney(goal.target_cents)}`}
+        </span>
+        <span className="text-sm font-semibold tabular-nums" style={{ color: over ? '#34d399' : undefined }}>
+          {formatMoney(currentCents)}
+          {!over && <span className="text-xs font-normal text-muted"> / {formatMoney(goal.target_cents)}</span>}
+        </span>
+      </div>
+
+      {!over && remaining > 0 && (
+        <p className="text-xs text-muted mt-1">{formatMoney(remaining)} to go</p>
+      )}
+    </div>
+  )
+}
+
+export function Goals() {
+  const { data: goals = [] } = useGoals()
+  const { data: accounts = [] } = useAccounts()
+  const { data: latestBalances = [] } = useLatestBalances()
+  const deleteGoal = useDeleteGoal()
+
+  const [showAdd, setShowAdd]     = useState(false)
+  const [editTarget, setEditTarget] = useState<Goal | null>(null)
+
+  const balanceMap = new Map(latestBalances.map(s => [s.account_id, s.balance_cents]))
+
+  function currentCentsFor(goal: Goal): number {
+    if (goal.linked_account_id) return balanceMap.get(goal.linked_account_id) ?? 0
+    return goal.current_cents
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this goal?')) return
+    await deleteGoal.mutateAsync(id)
+  }
+
+  return (
+    <div className="pb-24">
+      <div className="px-4 pt-12 pb-4 border-b border-border flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-text">Goals</h1>
+        <button onClick={() => setShowAdd(true)} className="btn text-sm gap-1.5">
+          <span className="text-base leading-none">+</span> Add
+        </button>
+      </div>
+
+      {goals.length === 0 && (
+        <div className="px-4 pt-5">
+          <div className="card px-4 py-5 text-center">
+            <p className="text-sm text-subtle">No goals yet.</p>
+            <p className="text-xs text-muted mt-1">Set a savings target and track your progress over time.</p>
+            <button onClick={() => setShowAdd(true)} className="btn-primary mt-4 px-5 py-2 text-sm">
+              Add first goal
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="px-4 pt-4 flex flex-col gap-3">
+        {goals.map(goal => (
+          <GoalCard
+            key={goal.id}
+            goal={goal}
+            currentCents={currentCentsFor(goal)}
+            onEdit={() => setEditTarget(goal)}
+            onDelete={() => handleDelete(goal.id)}
+          />
+        ))}
+      </div>
+
+      {showAdd && (
+        <GoalSheet accounts={accounts} balanceMap={balanceMap} onClose={() => setShowAdd(false)} />
+      )}
+      {editTarget && (
+        <GoalSheet
+          existing={editTarget}
+          accounts={accounts}
+          balanceMap={balanceMap}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function GoalSheet({
+  existing,
+  accounts,
+  balanceMap,
+  onClose
+}: {
+  existing?: Goal
+  accounts: ReturnType<typeof useAccounts>['data'] & object[]
+  balanceMap: Map<string, number>
+  onClose: () => void
+}) {
+  const addGoal    = useAddGoal()
+  const updateGoal = useUpdateGoal()
+
+  const savingsAccounts = (accounts as { id: string; name: string; type: string }[])
+    .filter(a => a.type === 'savings' || a.type === 'investment')
+
+  const [name,      setName]      = useState(existing?.name ?? '')
+  const [target,    setTarget]    = useState(existing ? formatDollars(existing.target_cents) : '')
+  const [targetDate, setTargetDate] = useState(existing?.target_date ?? '')
+  const [linkedId,  setLinkedId]  = useState(existing?.linked_account_id ?? '')
+  const [manual,    setManual]    = useState(existing && !existing.linked_account_id ? formatDollars(existing.current_cents) : '')
+
+  const currentFromLinked = linkedId ? (balanceMap.get(linkedId) ?? 0) : null
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const data = {
+      name: name.trim(),
+      target_cents: parseCents(target),
+      target_date: targetDate || null,
+      linked_account_id: linkedId || null,
+      current_cents: linkedId ? 0 : parseCents(manual)
+    }
+    if (existing) {
+      await updateGoal.mutateAsync({ id: existing.id, ...data })
+    } else {
+      await addGoal.mutateAsync(data)
+    }
+    onClose()
+  }
+
+  const isPending = addGoal.isPending || updateGoal.isPending
+
+  return (
+    <Sheet onClose={onClose} title={existing ? 'Edit goal' : 'New goal'} maxHeight="90vh">
+      <form onSubmit={submit} className="px-4 flex flex-col gap-4 pb-4">
+        <div>
+          <label className="text-xs text-muted block mb-1.5">Goal name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. Emergency fund, Vacation, New car"
+            required
+            autoFocus
+            className="field"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted block mb-1.5">Target amount</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="1"
+              value={target}
+              onChange={e => setTarget(e.target.value)}
+              placeholder="0.00"
+              required
+              className="field pl-7"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted block mb-1.5">Target date (optional)</label>
+          <input
+            type="date"
+            value={targetDate}
+            onChange={e => setTargetDate(e.target.value)}
+            min={todayISO()}
+            className="field"
+          />
+        </div>
+
+        {savingsAccounts.length > 0 && (
+          <div>
+            <label className="text-xs text-muted block mb-1.5">Link to account (optional)</label>
+            <p className="text-xs text-muted mb-2">Automatically tracks the balance of one of your accounts as progress.</p>
+            <select
+              value={linkedId}
+              onChange={e => setLinkedId(e.target.value)}
+              className="field"
+            >
+              <option value="">None — track manually</option>
+              {savingsAccounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            {linkedId && currentFromLinked !== null && (
+              <p className="text-xs text-muted mt-1.5">
+                Current balance: {formatMoney(currentFromLinked)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {!linkedId && (
+          <div>
+            <label className="text-xs text-muted block mb-1.5">Current amount saved</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={manual}
+                onChange={e => setManual(e.target.value)}
+                placeholder="0.00"
+                className="field pl-7"
+              />
+            </div>
+          </div>
+        )}
+
+        <button type="submit" disabled={isPending || !name.trim()} className="btn-primary py-3 mt-1">
+          {isPending ? 'Saving…' : existing ? 'Save changes' : 'Add goal'}
+        </button>
+      </form>
+    </Sheet>
+  )
+}
+
+function IconEdit() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  )
+}
+
+function IconTrash() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  )
+}
