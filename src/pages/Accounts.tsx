@@ -267,7 +267,7 @@ function AddViaBankSheet({ onClose }: { onClose: () => void }) {
     const appId = import.meta.env.VITE_TELLER_APP_ID as string
     const tc = window.TellerConnect.setup({
       applicationId: appId,
-      environment:   'production',
+      environment:   'development',
       products:      ['transactions', 'balance'],
       onSuccess: (enrollment) => {
         const inst = enrollment.accounts[0]?.institution?.name ?? null
@@ -599,7 +599,7 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
     const appId = import.meta.env.VITE_TELLER_APP_ID as string
     const tc = window.TellerConnect.setup({
       applicationId: appId,
-      environment:   'production',
+      environment:   'development',
       products:      ['transactions', 'balance'],
       onSuccess: (enrollment) => {
         const inst = enrollment.accounts[0]?.institution?.name ?? null
