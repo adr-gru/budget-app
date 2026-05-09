@@ -12,7 +12,7 @@ export function BottomNav() {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 bg-bg/85 backdrop-blur-xl border-t border-border z-40"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{ willChange: 'transform' }}
     >
       <div className="flex">
         {tabs.map(({ to, label, icon: Icon }) => (
@@ -31,6 +31,8 @@ export function BottomNav() {
           </NavLink>
         ))}
       </div>
+      {/* Safe area spacer — separate from tab row so scroll recalcs don't resize the nav */}
+      <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
     </nav>
   )
 }

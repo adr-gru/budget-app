@@ -15,7 +15,7 @@ import { Goals } from './pages/Goals'
 import { Transactions } from './pages/Transactions'
 import { Onboarding } from './pages/Onboarding'
 import { BottomNav } from './components/BottomNav'
-import { InstallPrompt } from './components/InstallPrompt'
+
 import { queryClient } from './lib/queryClient'
 import { isSupabaseConfigured } from './lib/supabase'
 import { useProfile } from './data/profile'
@@ -62,7 +62,6 @@ function AuthenticatedApp() {
 
   return (
     <>
-      <InstallPrompt />
       <Routes>
         <Route path="/"              element={<Dashboard />} />
         <Route path="/accounts"      element={<Accounts />} />
