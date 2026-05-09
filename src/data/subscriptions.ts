@@ -1,8 +1,13 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, addMonths, addYears, format, isBefore, parseISO } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import type { Bucket, SubCadence, Subscription } from '../lib/supabase'
 import { cycleEnd } from '../lib/cycle'
+import { useTransactions } from './transactions'
+import { detectSubscriptions, normalizeDescription, type SuggestedSubscription } from '../lib/detectSubscriptions'
+
+export type { SuggestedSubscription }
 
 export function useSubscriptions() {
   return useQuery({
@@ -104,4 +109,14 @@ export function monthlyEquivalentCents(sub: Subscription): number {
   if (sub.cadence === 'weekly')  return Math.round(sub.amount_cents * 52 / 12)
   if (sub.cadence === 'yearly')  return Math.round(sub.amount_cents / 12)
   return sub.amount_cents
+}
+
+export function useSuggestedSubscriptions() {
+  const { data: transactions = [] } = useTransactions()
+  const { data: subs = [] } = useSubscriptions()
+
+  return useMemo(() => {
+    const existingNormalized = new Set(subs.map(s => normalizeDescription(s.name)))
+    return detectSubscriptions(transactions, existingNormalized)
+  }, [transactions, subs])
 }

@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import {
   useSubscriptions, useAddSubscription, useUpdateSubscription,
-  useDeactivateSubscription, advanceNextCharge, monthlyEquivalentCents
+  useDeactivateSubscription, advanceNextCharge, monthlyEquivalentCents,
+  useSuggestedSubscriptions
 } from '../data/subscriptions'
 import { SubscriptionRow } from '../components/SubscriptionRow'
 import { BUCKETS, BUCKET_META } from '../lib/buckets'
 import { formatMoney, parseCents, formatDollars } from '../lib/money'
 import { todayISO } from '../lib/cycle'
 import type { Bucket, SubCadence, Subscription } from '../lib/supabase'
+import type { SuggestedSubscription } from '../data/subscriptions'
 
 const CADENCE_OPTIONS: { value: SubCadence; label: string }[] = [
   { value: 'weekly',  label: 'Weekly'  },
@@ -17,11 +19,23 @@ const CADENCE_OPTIONS: { value: SubCadence; label: string }[] = [
 
 export function Subscriptions() {
   const { data: subs = [] } = useSubscriptions()
-  const updateSub = useUpdateSubscription()
+  const updateSub   = useUpdateSubscription()
+  const suggestions = useSuggestedSubscriptions()
+  const addSub      = useAddSubscription()
 
   const [showAdd, setShowAdd] = useState(false)
   const [editTarget, setEditTarget] = useState<Subscription | null>(null)
   const deactivate = useDeactivateSubscription()
+
+  async function handleAddSuggestion(s: SuggestedSubscription) {
+    await addSub.mutateAsync({
+      name:           s.name,
+      amount_cents:   s.amount_cents,
+      cadence:        s.cadence,
+      next_charge_on: s.next_charge_on,
+      bucket:         s.bucket === 'uncategorized' ? 'wants' : (s.bucket as Bucket)
+    })
+  }
 
   // Auto-advance overdue subscriptions on mount
   useEffect(() => {
@@ -59,11 +73,41 @@ export function Subscriptions() {
         </button>
       </div>
 
-      {subs.length === 0 && (
+      {suggestions.length > 0 && (
+        <div className="px-4 pt-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted uppercase tracking-wider">Detected recurring</p>
+          </div>
+          <div className="card px-4 py-0">
+            {suggestions.map((s, idx) => (
+              <div
+                key={s.name}
+                className={`flex items-center gap-3 py-3 ${idx < suggestions.length - 1 ? 'border-b border-border' : ''}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-text truncate">{s.name}</p>
+                  <p className="text-xs text-muted mt-0.5 capitalize">
+                    {formatMoney(s.amount_cents)} · {s.cadence} · {s.occurrences}× seen
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleAddSuggestion(s)}
+                  disabled={addSub.isPending}
+                  className="btn text-xs py-1 px-3 flex-shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {subs.length === 0 && suggestions.length === 0 && (
         <div className="px-4 pt-5">
           <div className="card px-4 py-4 text-center">
             <p className="text-sm text-subtle">No subscriptions yet.</p>
-            <p className="text-xs text-muted mt-1">Track Netflix, Spotify, rent — anything that recurs.</p>
+            <p className="text-xs text-muted mt-1">Track Netflix, Spotify, rent — anything that recurs. Import transactions to detect them automatically.</p>
           </div>
         </div>
       )}

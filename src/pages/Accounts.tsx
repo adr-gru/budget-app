@@ -9,13 +9,20 @@ import {
 import { useLatestBalances, useCycleActivitySnapshots, computeActivity } from '../data/snapshots'
 import { useProfile } from '../data/profile'
 import { AccountCard } from '../components/AccountCard'
-import { UpdateBalanceSheet } from '../components/UpdateBalanceSheet'
 import { Sheet } from '../components/Sheet'
 import { currentCycleStart, todayISO } from '../lib/cycle'
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_META } from '../lib/accountTypes'
 import { formatMoney, parseCents } from '../lib/money'
 import type { Account, AccountType } from '../lib/supabase'
 import type { TellerConnectAccount } from '../lib/teller.d'
+
+function mapTellerType(type: string, subtype: string): AccountType {
+  if (type === 'credit') return 'credit_card'
+  if (subtype === 'savings') return 'savings'
+  const investSubtypes = ['brokerage', 'ira', 'k401', 'k401a', 'k403b', 'k457']
+  if (type === 'investment' || investSubtypes.includes(subtype)) return 'investment'
+  return 'checking'
+}
 
 export function Accounts() {
   const { data: accounts = [] }        = useAccounts()
@@ -31,7 +38,6 @@ export function Accounts() {
   const lastUpdatedMap = new Map(latestBalances.map(s => [s.account_id, s.recorded_at]))
   const activityMap    = computeActivity(activitySnapshots, cycleStart)
 
-  const [balanceTarget, setBalanceTarget] = useState<Account | null>(null)
   const [editTarget,    setEditTarget]    = useState<Account | null>(null)
   const [connectTarget, setConnectTarget] = useState<Account | null>(null)
   const [showAdd,       setShowAdd]       = useState(false)
@@ -76,9 +82,9 @@ export function Accounts() {
         <div className="px-4 pt-5">
           <div className="card px-4 py-5 text-center">
             <p className="text-sm text-subtle mb-1">No accounts yet.</p>
-            <p className="text-xs text-muted">Add your credit cards, checking, savings, and investment accounts.</p>
+            <p className="text-xs text-muted">Link your bank accounts via Teller to start syncing balances automatically.</p>
             <button onClick={() => setShowAdd(true)} className="btn-primary mt-4 px-5 py-2 text-sm">
-              Add first account
+              Connect first account
             </button>
           </div>
         </div>
@@ -106,7 +112,7 @@ export function Accounts() {
                   balance={balanceMap.get(a.id) ?? null}
                   delta={activityMap.get(a.id)?.delta ?? null}
                   lastSnapshotAt={lastUpdatedMap.get(a.id) ?? null}
-                  onTap={() => { if (!a.teller_enrollment_id) setBalanceTarget(a) }}
+                  onTap={() => setEditTarget(a)}
                   onEdit={() => setEditTarget(a)}
                 />
               ))}
@@ -114,14 +120,6 @@ export function Accounts() {
           </div>
         )
       })}
-
-      {balanceTarget && (
-        <UpdateBalanceSheet
-          account={balanceTarget}
-          currentBalance={balanceMap.get(balanceTarget.id) ?? null}
-          onClose={() => setBalanceTarget(null)}
-        />
-      )}
 
       {editTarget && (
         <EditAccountSheet
@@ -138,121 +136,225 @@ export function Accounts() {
         />
       )}
 
-      {showAdd && <AddAccountSheet onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddViaBankSheet onClose={() => setShowAdd(false)} />}
     </div>
   )
 }
 
-// ─── Add Account Sheet ────────────────────────────────────────────────────────
+// ─── Add via Bank Sheet ───────────────────────────────────────────────────────
 
-function AddAccountSheet({ onClose }: { onClose: () => void }) {
-  const addAccount    = useAddAccount()
-  const updateAccount = useUpdateAccount()
-  const { data: accounts = [] } = useAccounts()
+interface AccountConfig {
+  checked:    boolean
+  nickname:   string
+  limitValue: string
+  dueDay:     string
+}
 
-  const [name,       setName]       = useState('')
-  const [type,       setType]       = useState<AccountType>('credit_card')
-  const [limitValue, setLimitValue] = useState('')
-  const [dueDay,     setDueDay]     = useState('')
+function AddViaBankSheet({ onClose }: { onClose: () => void }) {
+  const [scriptReady,     setScriptReady]     = useState(false)
+  const [scriptError,     setScriptError]     = useState(false)
+  const [tellerAccts,     setTellerAccts]     = useState<TellerConnectAccount[] | null>(null)
+  const [accessToken,     setAccessToken]     = useState<string | null>(null)
+  const [institutionName, setInstitutionName] = useState<string | null>(null)
+  const [config,          setConfig]          = useState<Record<string, AccountConfig>>({})
+  const [submitting,      setSubmitting]      = useState(false)
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    await addAccount.mutateAsync({
-      name: name.trim(),
-      type,
-      credit_limit_cents: type === 'credit_card' && limitValue ? parseCents(limitValue) : null,
-      due_day: type === 'credit_card' && dueDay ? Number(dueDay) : null
+  const enroll      = useTellerEnroll()
+  const addAccount  = useAddAccount()
+  const linkAccount = useLinkAccountToTeller()
+  const tellerSync  = useTellerSync()
+  const loadScript  = useLoadTellerConnect()
+
+  useEffect(() => {
+    loadScript()
+      .then(() => setScriptReady(true))
+      .catch(() => setScriptError(true))
+  }, [loadScript])
+
+  function openTeller() {
+    if (!window.TellerConnect) return
+    const appId = import.meta.env.VITE_TELLER_APP_ID as string
+    const tc = window.TellerConnect.setup({
+      applicationId: appId,
+      environment:   'production',
+      products:      ['transactions', 'balance'],
+      onSuccess: (enrollment) => {
+        const inst = enrollment.accounts[0]?.institution?.name ?? null
+        setAccessToken(enrollment.accessToken)
+        setInstitutionName(inst)
+        setTellerAccts(enrollment.accounts)
+        const defaults: Record<string, AccountConfig> = {}
+        for (const a of enrollment.accounts) {
+          defaults[a.id] = { checked: true, nickname: a.name, limitValue: '', dueDay: '' }
+        }
+        setConfig(defaults)
+      },
+      onExit: () => {}
     })
-    onClose()
+    tc.open()
   }
 
-  async function confirmArchive(account: Account) {
-    if (!confirm(`Archive "${account.name}"? It will no longer appear in your dashboard.`)) return
-    await updateAccount.mutateAsync({ id: account.id, archived: true })
+  function updateConfig(id: string, patch: Partial<AccountConfig>) {
+    setConfig(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
   }
 
-  return (
-    <Sheet onClose={onClose} title="Add account" maxHeight="90vh">
-      <form onSubmit={submit} className="px-4 flex flex-col gap-4 pb-4">
-        <div>
-          <label className="text-xs text-muted block mb-1.5">Account name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="e.g. Chase Freedom, Vanguard"
-            required
-            autoFocus
-            className="field"
-          />
-        </div>
+  const selectedCount = tellerAccts
+    ? tellerAccts.filter(a => config[a.id]?.checked).length
+    : 0
 
-        <div>
-          <label className="text-xs text-muted block mb-1.5">Type</label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {ACCOUNT_TYPES.map(t => {
-              const meta = ACCOUNT_TYPE_META[t]
+  async function confirmImport() {
+    if (!tellerAccts || !accessToken) return
+    setSubmitting(true)
+    try {
+      const enrollResult = await enroll.mutateAsync({
+        access_token: accessToken,
+        institution_name: institutionName
+      })
+      for (const ta of tellerAccts) {
+        const cfg = config[ta.id]
+        if (!cfg?.checked) continue
+        const type    = mapTellerType(ta.type, ta.subtype)
+        const newAcct = await addAccount.mutateAsync({
+          name:               cfg.nickname.trim() || ta.name,
+          type,
+          credit_limit_cents: type === 'credit_card' && cfg.limitValue ? parseCents(cfg.limitValue) : null,
+          due_day:            type === 'credit_card' && cfg.dueDay ? Number(cfg.dueDay) : null,
+        })
+        await linkAccount.mutateAsync({
+          account_id:              newAcct.id,
+          teller_account_id:       ta.id,
+          teller_enrollment_db_id: enrollResult.enrollment_db_id,
+          institution_name:        institutionName
+        })
+      }
+      await tellerSync.mutateAsync()
+      onClose()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Step 2 — configure accounts
+  if (tellerAccts) {
+    return (
+      <Sheet onClose={onClose} title="Import accounts" maxHeight="90vh">
+        <div className="px-4 pb-4">
+          {institutionName && (
+            <p className="text-xs text-muted mb-4">
+              Found {tellerAccts.length} account{tellerAccts.length !== 1 ? 's' : ''} at {institutionName}
+            </p>
+          )}
+          <div className="flex flex-col gap-3 mb-5">
+            {tellerAccts.map(ta => {
+              const cfg  = config[ta.id] ?? { checked: true, nickname: ta.name, limitValue: '', dueDay: '' }
+              const type = mapTellerType(ta.type, ta.subtype)
               return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setType(t)}
-                  className={`card px-3 py-2.5 text-left text-sm transition-colors ${type === t ? 'border-2' : ''}`}
-                  style={type === t ? { borderColor: meta.color, color: meta.color } : {}}
+                <div
+                  key={ta.id}
+                  className={`card px-4 py-3 transition-opacity ${cfg.checked ? '' : 'opacity-50'}`}
                 >
-                  {meta.label}
-                </button>
+                  <div className="flex items-start gap-3 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => updateConfig(ta.id, { checked: !cfg.checked })}
+                      className={`w-5 h-5 rounded flex-shrink-0 mt-0.5 flex items-center justify-center border-2 transition-colors ${
+                        cfg.checked ? 'bg-accent border-accent' : 'border-border'
+                      }`}
+                    >
+                      {cfg.checked && (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted capitalize">
+                        {ta.subtype.replace(/_/g, ' ')}{ta.last_four ? ` ····${ta.last_four}` : ''}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-medium" style={{ color: ACCOUNT_TYPE_META[type].color }}>
+                      {ACCOUNT_TYPE_META[type].label}
+                    </span>
+                  </div>
+
+                  {cfg.checked && (
+                    <div className="flex flex-col gap-2 pl-8">
+                      <div>
+                        <label className="text-[10px] text-muted block mb-1">Nickname</label>
+                        <input
+                          type="text"
+                          value={cfg.nickname}
+                          onChange={e => updateConfig(ta.id, { nickname: e.target.value })}
+                          className="field text-sm py-2"
+                          placeholder={ta.name}
+                        />
+                      </div>
+                      {type === 'credit_card' && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-muted block mb-1">Credit limit</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">$</span>
+                              <input
+                                type="number" inputMode="decimal" step="0.01" min="0"
+                                value={cfg.limitValue}
+                                onChange={e => updateConfig(ta.id, { limitValue: e.target.value })}
+                                placeholder="0.00" className="field text-sm py-2 pl-6"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted block mb-1">Due day</label>
+                            <input
+                              type="number" inputMode="numeric" min="1" max="31"
+                              value={cfg.dueDay}
+                              onChange={e => updateConfig(ta.id, { dueDay: e.target.value })}
+                              placeholder="e.g. 15" className="field text-sm py-2"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
+          <button
+            onClick={confirmImport}
+            disabled={selectedCount === 0 || submitting}
+            className="btn-primary w-full py-3"
+          >
+            {submitting
+              ? 'Importing…'
+              : selectedCount === 0
+              ? 'Select at least one account'
+              : `Import ${selectedCount} account${selectedCount !== 1 ? 's' : ''}`}
+          </button>
         </div>
+      </Sheet>
+    )
+  }
 
-        {type === 'credit_card' && (
-          <>
-            <div>
-              <label className="text-xs text-muted block mb-1.5">Credit limit (optional)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
-                <input
-                  type="number" inputMode="decimal" step="0.01" min="0"
-                  value={limitValue} onChange={e => setLimitValue(e.target.value)}
-                  placeholder="0.00" className="field pl-7"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-muted block mb-1.5">Payment due day (optional)</label>
-              <input
-                type="number" inputMode="numeric" min="1" max="31"
-                value={dueDay} onChange={e => setDueDay(e.target.value)}
-                placeholder="e.g. 15" className="field"
-              />
-            </div>
-          </>
+  // Step 1 — connect
+  return (
+    <Sheet onClose={onClose} title="Add account" maxHeight="55vh">
+      <div className="px-4 pb-4">
+        <p className="text-sm text-subtle mb-5">
+          Accounts sync directly from your bank via Teller. Your credentials are never stored here — they go directly to your bank.
+        </p>
+        {scriptError ? (
+          <p className="text-sm text-danger">Could not load Teller Connect. Check your internet connection and try again.</p>
+        ) : (
+          <button
+            onClick={openTeller}
+            disabled={!scriptReady}
+            className="btn-primary w-full py-3"
+          >
+            {scriptReady ? 'Connect with Teller' : 'Loading…'}
+          </button>
         )}
-
-        <button type="submit" disabled={addAccount.isPending || !name.trim()} className="btn-primary py-3 mt-1">
-          {addAccount.isPending ? 'Adding…' : 'Add account'}
-        </button>
-      </form>
-
-      {accounts.length > 0 && (
-        <div className="px-4 pb-4">
-          <p className="text-xs text-muted mb-3 uppercase tracking-wider">Archive account</p>
-          <div className="flex flex-col gap-1">
-            {accounts.map(a => (
-              <button
-                key={a.id}
-                onClick={() => confirmArchive(a)}
-                className="w-full card px-3 py-2.5 text-left text-sm text-subtle flex items-center justify-between"
-              >
-                <span>{a.name}</span>
-                <span className="text-xs text-muted">{ACCOUNT_TYPE_META[a.type].label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
     </Sheet>
   )
 }
@@ -276,8 +378,8 @@ function EditAccountSheet({
   const [limitValue, setLimitValue] = useState(
     account.credit_limit_cents ? String(account.credit_limit_cents / 100) : ''
   )
-  const [dueDay,    setDueDay]    = useState(account.due_day ? String(account.due_day) : '')
-  const [deleting,  setDeleting]  = useState(false)
+  const [dueDay,   setDueDay]   = useState(account.due_day ? String(account.due_day) : '')
+  const [deleting, setDeleting] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -291,8 +393,7 @@ function EditAccountSheet({
   }
 
   async function handleDelete() {
-    const hasTeller = Boolean(account.teller_enrollment_id)
-    const msg = hasTeller
+    const msg = account.teller_enrollment_id
       ? `Delete "${account.name}"? This will disconnect its bank link and remove all balance history. Cannot be undone.`
       : `Delete "${account.name}"? All balance history will be removed. Cannot be undone.`
     if (!confirm(msg)) return
@@ -308,7 +409,8 @@ function EditAccountSheet({
           <p className="text-xs mb-1" style={{ color: meta.color }}>{meta.label}</p>
         </div>
         <div>
-          <label className="text-xs text-muted block mb-1.5">Account name</label>
+          <label className="text-xs text-muted block mb-1">Nickname</label>
+          <p className="text-[10px] text-muted mb-1.5">Display name shown in the app</p>
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
             required autoFocus className="field"
@@ -342,7 +444,7 @@ function EditAccountSheet({
         </button>
       </form>
 
-      {/* Teller section */}
+      {/* Bank sync */}
       <div className="px-4 pt-2 pb-2">
         <div className="card px-4 py-3 flex items-center justify-between">
           <div>
@@ -352,7 +454,7 @@ function EditAccountSheet({
                 Connected{account.teller_institution_name ? ` · ${account.teller_institution_name}` : ''}
               </p>
             ) : (
-              <p className="text-xs text-muted mt-0.5">Auto-sync balances via Teller</p>
+              <p className="text-xs text-muted mt-0.5">Not linked — tap to connect</p>
             )}
           </div>
           <button
@@ -367,11 +469,6 @@ function EditAccountSheet({
 
       {/* Delete */}
       <div className="px-4 pt-2 pb-4">
-        {account.teller_enrollment_id && (
-          <p className="text-xs text-warning mb-2">
-            Deleting this account will also remove its bank connection. You can reconnect later.
-          </p>
-        )}
         <button
           type="button"
           onClick={handleDelete}
@@ -385,15 +482,15 @@ function EditAccountSheet({
   )
 }
 
-// ─── Connect Bank Sheet (Teller Connect) ─────────────────────────────────────
+// ─── Connect Bank Sheet (reconnect existing) ──────────────────────────────────
 
 function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () => void }) {
-  const [scriptReady,   setScriptReady]   = useState(false)
-  const [scriptError,   setScriptError]   = useState(false)
-  const [tellerAccts,   setTellerAccts]   = useState<TellerConnectAccount[] | null>(null)
-  const [accessToken,   setAccessToken]   = useState<string | null>(null)
+  const [scriptReady,     setScriptReady]     = useState(false)
+  const [scriptError,     setScriptError]     = useState(false)
+  const [tellerAccts,     setTellerAccts]     = useState<TellerConnectAccount[] | null>(null)
+  const [accessToken,     setAccessToken]     = useState<string | null>(null)
   const [institutionName, setInstitutionName] = useState<string | null>(null)
-  const [selectedId,    setSelectedId]    = useState<string | null>(null)
+  const [selectedId,      setSelectedId]      = useState<string | null>(null)
 
   const enroll      = useTellerEnroll()
   const linkAccount = useLinkAccountToTeller()
@@ -411,8 +508,8 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
     const appId = import.meta.env.VITE_TELLER_APP_ID as string
     const tc = window.TellerConnect.setup({
       applicationId: appId,
-      environment: 'production',
-      products: ['transactions', 'balance'],
+      environment:   'production',
+      products:      ['transactions', 'balance'],
       onSuccess: (enrollment) => {
         const inst = enrollment.accounts[0]?.institution?.name ?? null
         setAccessToken(enrollment.accessToken)
@@ -420,7 +517,7 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
         setTellerAccts(enrollment.accounts)
         if (enrollment.accounts.length === 1) setSelectedId(enrollment.accounts[0].id)
       },
-      onExit: () => { /* user dismissed */ }
+      onExit: () => {}
     })
     tc.open()
   }
@@ -428,7 +525,7 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
   async function confirmLink() {
     if (!tellerAccts || !selectedId || !accessToken) return
     const result = await enroll.mutateAsync({
-      access_token: accessToken,
+      access_token:     accessToken,
       institution_name: institutionName
     })
     await linkAccount.mutateAsync({
@@ -443,7 +540,6 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
 
   const meta = ACCOUNT_TYPE_META[account.type]
 
-  // Step 2 — account picker
   if (tellerAccts) {
     return (
       <Sheet onClose={onClose} title="Select account" maxHeight="75vh">
@@ -464,7 +560,7 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
                 <div>
                   <p className="text-sm font-medium text-text">{a.name}</p>
                   <p className="text-xs text-muted mt-0.5 capitalize">
-                    {a.subtype.replace('_', ' ')}{a.last_four ? ` ····${a.last_four}` : ''}
+                    {a.subtype.replace(/_/g, ' ')}{a.last_four ? ` ····${a.last_four}` : ''}
                   </p>
                 </div>
                 {selectedId === a.id && (
@@ -480,16 +576,13 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
             disabled={!selectedId || enroll.isPending || linkAccount.isPending || tellerSync.isPending}
             className="btn-primary w-full py-3"
           >
-            {enroll.isPending || linkAccount.isPending || tellerSync.isPending
-              ? 'Linking…'
-              : 'Link account'}
+            {enroll.isPending || linkAccount.isPending || tellerSync.isPending ? 'Linking…' : 'Link account'}
           </button>
         </div>
       </Sheet>
     )
   }
 
-  // Step 1 — initiate Teller Connect
   return (
     <Sheet onClose={onClose} title="Connect bank" maxHeight="55vh">
       <div className="px-4 pb-4">
@@ -504,11 +597,9 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
             <p className="text-xs text-muted">{meta.label}</p>
           </div>
         </div>
-
         <p className="text-sm text-subtle mb-5">
           Connect your bank via Teller to automatically sync your balance. Your credentials go directly to your bank — they're never stored here.
         </p>
-
         {scriptError ? (
           <p className="text-sm text-danger">Could not load Teller Connect. Check your internet connection.</p>
         ) : (
