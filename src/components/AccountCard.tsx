@@ -74,7 +74,7 @@ export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap, on
                 type="button"
                 onClick={e => { e.stopPropagation(); onEdit() }}
                 aria-label="Edit account"
-                className="p-1.5 -mr-1.5 -mt-0.5 text-white/50 hover:text-white transition-colors rounded-lg"
+                className="p-2 -mr-2 -mt-1 min-w-[44px] min-h-[44px] flex items-center justify-center text-white/50 hover:text-white transition-colors rounded-lg"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>

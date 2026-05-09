@@ -161,7 +161,7 @@ export function Dashboard() {
 
   if (profileLoading) {
     return (
-      <div className="pb-24 lg:pb-0 px-4 lg:px-6 pt-6 lg:pt-8">
+      <div className="pb-24 lg:pb-8 px-4 lg:px-6 pt-6 lg:pt-8">
         <Skeleton className="h-5 w-28 mb-1" />
         <Skeleton className="h-7 w-44 mb-6" />
         <Skeleton className="h-28 rounded-lg mb-3" />
@@ -250,7 +250,7 @@ export function Dashboard() {
               <button
                 onClick={() => setShowWidgetPicker(true)}
                 aria-label="Customize hero widget"
-                className="p-2 rounded-lg text-muted hover:text-text hover:bg-elev transition-colors"
+                className="p-2 rounded-lg text-muted hover:text-text hover:bg-elev transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -397,7 +397,7 @@ export function Dashboard() {
         <div className="px-4 lg:px-6 pt-6">
           <div className="flex items-center justify-between mb-3">
             <p className="section-label">Goals</p>
-            <button onClick={() => navigate('/goals')} className="text-xs text-accent font-medium hover:text-accent/80 transition-colors">
+            <button onClick={() => navigate('/goals')} className="text-xs text-accent font-medium hover:text-accent/80 transition-colors px-1 py-2 -mr-1">
               See all →
             </button>
           </div>

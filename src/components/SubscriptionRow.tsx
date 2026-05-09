@@ -51,7 +51,7 @@ export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
         {formatMoney(s.amount_cents)}
         <span className="text-xs font-normal text-muted">{CADENCE_LABEL[s.cadence]}</span>
       </span>
-      <div className="flex items-center gap-0.5 flex-shrink-0">
+      <div className="flex items-center gap-1 flex-shrink-0">
         <button onClick={onEdit} className="btn-ghost p-2" aria-label="Edit">
           <IconEdit />
         </button>

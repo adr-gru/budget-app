@@ -28,7 +28,7 @@ export function UpdateBalanceSheet({ account, currentBalance, onClose }: Props) 
 
   return (
     <Sheet onClose={onClose} maxHeight="60vh">
-      <div className="px-4 pb-4">
+      <div className="px-5 pb-5">
         <div className="flex items-center justify-between mb-5">
           <div>
             <p className="text-xs mb-0.5" style={{ color: meta.color }}>{meta.label}</p>

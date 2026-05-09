@@ -8,11 +8,11 @@ import { Skeleton } from '../components/Skeleton'
 import { formatMoney } from '../lib/money'
 import type { Transaction, TransactionBucket } from '../lib/supabase'
 
-const BUCKET_META: Record<TransactionBucket, { label: string; color: string; bg: string }> = {
-  needs:         { label: 'Needs',         color: '#3B82F6', bg: '#EFF6FF' },
-  wants:         { label: 'Wants',         color: '#8B5CF6', bg: '#F5F3FF' },
-  savings:       { label: 'Savings',       color: '#16A34A', bg: '#F0FDF4' },
-  uncategorized: { label: 'Uncategorized', color: '#6B7280', bg: '#F3F4F6' },
+const BUCKET_META: Record<TransactionBucket, { label: string; color: string }> = {
+  needs:         { label: 'Needs',         color: '#3B82F6' },
+  wants:         { label: 'Wants',         color: '#8B5CF6' },
+  savings:       { label: 'Savings',       color: '#16A34A' },
+  uncategorized: { label: 'Uncategorized', color: '#6B7280' },
 }
 
 function dateLabel(iso: string): string {
@@ -117,7 +117,7 @@ export function Transactions() {
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span
                             className="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                            style={{ color: bm.color, background: bm.bg }}
+                            style={{ color: bm.color, background: bm.color + '18' }}
                           >
                             {bm.label}
                           </span>

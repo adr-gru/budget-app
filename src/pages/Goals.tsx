@@ -161,7 +161,7 @@ function GoalCard({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-0.5 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={onEdit} className="btn-ghost p-2">
             <IconEdit />
           </button>
