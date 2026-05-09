@@ -1,8 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { isNative } from '../lib/native'
 
 export function useBiometricLock() {
   const [locked, setLocked] = useState(false)
+
+  const unlock = useCallback(async () => {
+    if (!isNative) return
+    try {
+      const { BiometricAuth } = await import('@aparajita/capacitor-biometric-auth')
+      await BiometricAuth.authenticate({ reason: 'Unlock Budget' })
+      setLocked(false)
+    } catch {
+      // Stay locked — user can retry by tapping the button
+    }
+  }, [])
 
   useEffect(() => {
     if (!isNative) return
@@ -20,6 +31,7 @@ export function useBiometricLock() {
         const { value } = await Preferences.get({ key: 'biometric_enabled' })
         if (value !== 'true') return
         setLocked(true)
+        unlock()
       })
 
       cleanup = () => handle.remove()
@@ -27,18 +39,7 @@ export function useBiometricLock() {
 
     setup()
     return () => cleanup?.()
-  }, [])
-
-  async function unlock() {
-    if (!isNative) return
-    try {
-      const { BiometricAuth } = await import('@aparajita/capacitor-biometric-auth')
-      await BiometricAuth.authenticate({ reason: 'Unlock Budget' })
-      setLocked(false)
-    } catch {
-      // Keep locked — user can retry
-    }
-  }
+  }, [unlock])
 
   return { locked, unlock }
 }

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import type { PlaidLinkAccount } from '../lib/plaid.d'
 
 async function invokeEdgeFn<T>(name: string, body: Record<string, unknown>): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession()
@@ -94,5 +95,51 @@ export function usePlaidImportTransactions() {
   return useMutation({
     mutationFn: () => invokeEdgeFn<{ imported: number }>('plaid-transactions', {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions'] })
+  })
+}
+
+export interface PlaidItem {
+  id:               string
+  institution_name: string | null
+  created_at:       string
+  plaid_item_id:    string
+}
+
+export function usePlaidItems() {
+  return useQuery({
+    queryKey: ['plaid', 'items'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plaid_items')
+        .select('id, institution_name, created_at, plaid_item_id')
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return data as PlaidItem[]
+    }
+  })
+}
+
+interface ListAccountsResult {
+  institution_name: string | null
+  accounts:         PlaidLinkAccount[]
+}
+
+export function usePlaidListAccounts() {
+  return useMutation({
+    mutationFn: (plaid_item_db_id: string) =>
+      invokeEdgeFn<ListAccountsResult>('plaid-list-accounts', { plaid_item_db_id }),
+  })
+}
+
+export function usePlaidRemoveItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (plaid_item_db_id: string) =>
+      invokeEdgeFn<{ ok: boolean }>('plaid-remove-item', { plaid_item_db_id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['plaid', 'items'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['snapshots'] })
+    }
   })
 }
