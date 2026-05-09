@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, parseISO } from 'date-fns'
+import { differenceInCalendarDays, parseISO, formatDistanceToNowStrict } from 'date-fns'
 import type { Account } from '../lib/supabase'
 import { CARD_GRADIENTS } from '../lib/tokens'
 import { formatMoney } from '../lib/money'
@@ -32,92 +32,125 @@ interface Props {
   delta: number | null
   lastSnapshotAt: string | null
   onTap: () => void
+  onEdit?: () => void
 }
 
-export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap }: Props) {
-  const gradient = CARD_GRADIENTS[account.type as keyof typeof CARD_GRADIENTS]
-  const utilization = account.type === 'credit_card' && account.credit_limit_cents && balance !== null
+export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap, onEdit }: Props) {
+  const gradient      = CARD_GRADIENTS[account.type as keyof typeof CARD_GRADIENTS]
+  const utilization   = account.type === 'credit_card' && account.credit_limit_cents && balance !== null
     ? Math.round((balance / account.credit_limit_cents) * 100)
     : null
-  const dueDays = account.type === 'credit_card' && account.due_day != null
+  const dueDays       = account.type === 'credit_card' && account.due_day != null
     ? daysUntilDue(account.due_day)
     : null
-  const dueSoon = dueDays !== null && dueDays <= 5
-  const updatedLabel = lastUpdatedLabel(lastSnapshotAt)
-  const hasActivity = delta !== null && delta !== 0
-  const isDebt = account.type === 'credit_card'
+  const dueSoon        = dueDays !== null && dueDays <= 5
+  const updatedLabel   = lastUpdatedLabel(lastSnapshotAt)
+  const hasActivity    = delta !== null && delta !== 0
+  const isDebt         = account.type === 'credit_card'
+  const isTellerLinked = Boolean(account.teller_enrollment_id)
 
   return (
-    <button
-      onClick={onTap}
-      className="wallet-card w-full text-left"
-      style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
-    >
-      <div className="relative p-5 flex flex-col" style={{ minHeight: '160px' }}>
-        {/* Top row: name + type */}
-        <div className="flex items-start justify-between mb-auto">
-          <p className="text-sm font-semibold text-white truncate mr-2 leading-snug">{account.name}</p>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-white/70 flex-shrink-0 mt-0.5">
-            {TYPE_LABEL[account.type]}
-          </span>
-        </div>
-
-        {/* Balance */}
-        <div className="mt-4">
-          <p className="text-[11px] text-white/60 mb-0.5">
-            {account.type === 'credit_card' ? 'Balance owed' : 'Current balance'}
-          </p>
-          <p className="text-3xl font-bold tabular-nums text-white leading-none">
-            {balance !== null ? formatMoney(balance) : '—'}
-          </p>
-        </div>
-
-        {/* Bottom row */}
-        <div className="mt-3 flex items-end justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            {account.type === 'credit_card' && utilization !== null && account.credit_limit_cents && balance !== null ? (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-white/60">{formatMoney(account.credit_limit_cents - balance)} available</span>
-                  <span className={`text-[10px] font-semibold ${
-                    utilization >= 80 ? 'text-red-200' : utilization >= 50 ? 'text-yellow-100' : 'text-white/80'
-                  }`}>
-                    {utilization}% used
-                  </span>
-                </div>
-                <div className="h-1 bg-white/25 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(utilization, 100)}%`,
-                      background: utilization >= 80 ? 'rgba(255,150,150,0.9)' : 'rgba(255,255,255,0.75)'
-                    }}
-                  />
-                </div>
-              </div>
-            ) : updatedLabel ? (
-              <p className="text-[11px] text-white/60">Updated {updatedLabel}</p>
-            ) : null}
+    <div className="relative">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onTap}
+        onKeyDown={e => e.key === 'Enter' && onTap()}
+        className="wallet-card w-full text-left cursor-pointer"
+        style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
+      >
+        <div className="relative p-5 flex flex-col" style={{ minHeight: '160px' }}>
+          {/* Top row */}
+          <div className="flex items-start justify-between mb-auto">
+            <p className="text-sm font-semibold text-white truncate mr-2 leading-snug">{account.name}</p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/70 mt-0.5">
+                {TYPE_LABEL[account.type]}
+              </span>
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); onEdit() }}
+                  aria-label="Edit account"
+                  className="p-1 -mr-1 text-white/60 hover:text-white transition-colors rounded"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="text-right flex-shrink-0">
-            {dueDays !== null && (
-              <p className={`text-xs font-semibold ${dueSoon ? 'text-red-200' : 'text-white/70'}`}>
-                {dueDays === 0 ? 'Due today' : `Due in ${dueDays}d`}
-              </p>
-            )}
-            {hasActivity && (
-              <p className={`text-xs tabular-nums font-medium mt-0.5 ${
-                isDebt
-                  ? delta! > 0 ? 'text-red-200' : 'text-green-200'
-                  : delta! > 0 ? 'text-green-200' : 'text-red-200'
-              }`}>
-                {delta! > 0 ? '+' : ''}{formatMoney(delta!)} this cycle
-              </p>
-            )}
+          {/* Balance */}
+          <div className="mt-4">
+            <p className="text-[11px] text-white/60 mb-0.5">
+              {account.type === 'credit_card' ? 'Balance owed' : 'Current balance'}
+            </p>
+            <p className="text-3xl font-bold tabular-nums text-white leading-none">
+              {balance !== null ? formatMoney(balance) : '—'}
+            </p>
+          </div>
+
+          {/* Bottom row */}
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {account.type === 'credit_card' && utilization !== null && account.credit_limit_cents && balance !== null ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-white/60">{formatMoney(account.credit_limit_cents - balance)} available</span>
+                    <span className={`text-[10px] font-semibold ${
+                      utilization >= 80 ? 'text-red-200' : utilization >= 50 ? 'text-yellow-100' : 'text-white/80'
+                    }`}>
+                      {utilization}% used
+                    </span>
+                  </div>
+                  <div className="h-1 bg-white/25 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(utilization, 100)}%`,
+                        background: utilization >= 80 ? 'rgba(255,150,150,0.9)' : 'rgba(255,255,255,0.75)'
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : isTellerLinked && account.teller_last_synced_at ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-white/70 bg-white/15 rounded-full px-2 py-0.5">
+                  <svg width="7" height="7" viewBox="0 0 10 10" fill="currentColor">
+                    <circle cx="5" cy="5" r="5"/>
+                  </svg>
+                  Synced {formatDistanceToNowStrict(parseISO(account.teller_last_synced_at), { addSuffix: true })}
+                </span>
+              ) : isTellerLinked ? (
+                <span className="inline-flex items-center gap-1 text-[10px] text-white/50 bg-white/10 rounded-full px-2 py-0.5">
+                  Teller linked
+                </span>
+              ) : updatedLabel ? (
+                <p className="text-[11px] text-white/60">Updated {updatedLabel}</p>
+              ) : null}
+            </div>
+
+            <div className="text-right flex-shrink-0">
+              {dueDays !== null && (
+                <p className={`text-xs font-semibold ${dueSoon ? 'text-red-200' : 'text-white/70'}`}>
+                  {dueDays === 0 ? 'Due today' : `Due in ${dueDays}d`}
+                </p>
+              )}
+              {hasActivity && (
+                <p className={`text-xs tabular-nums font-medium mt-0.5 ${
+                  isDebt
+                    ? delta! > 0 ? 'text-red-200' : 'text-green-200'
+                    : delta! > 0 ? 'text-green-200' : 'text-red-200'
+                }`}>
+                  {delta! > 0 ? '+' : ''}{formatMoney(delta!)} this cycle
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }

@@ -30,8 +30,9 @@ export function Sheet({ onClose, children, maxHeight = '85vh', title }: Props) {
 
   return (
     <>
+      {/* Backdrop — z-[45] so it covers the nav (z-40) but sits below the sheet (z-50) */}
       <div
-        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        className={`fixed inset-0 bg-black/40 z-[45] transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={close}
       />
       <div

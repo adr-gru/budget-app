@@ -12,6 +12,7 @@ import { Subscriptions } from './pages/Subscriptions'
 import { Settings } from './pages/Settings'
 import { History } from './pages/History'
 import { Goals } from './pages/Goals'
+import { Transactions } from './pages/Transactions'
 import { Onboarding } from './pages/Onboarding'
 import { BottomNav } from './components/BottomNav'
 import { InstallPrompt } from './components/InstallPrompt'
@@ -67,8 +68,9 @@ function AuthenticatedApp() {
         <Route path="/accounts"      element={<Accounts />} />
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/settings"      element={<Settings />} />
-        <Route path="/history"       element={<History />} />
-        <Route path="/goals"         element={<Goals />} />
+        <Route path="/history"        element={<History />} />
+        <Route path="/goals"          element={<Goals />} />
+        <Route path="/transactions"   element={<Transactions />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="*"              element={<Navigate to="/" replace />} />
       </Routes>
