@@ -19,7 +19,7 @@ declare global {
     TellerConnect: {
       setup: (config: {
         applicationId: string
-        environment?:  'production' | 'sandbox'
+        environment?:  'production' | 'sandbox' | 'development'
         products?:     string[]
         onSuccess:     (enrollment: TellerConnectEnrollment) => void
         onExit?:       () => void
