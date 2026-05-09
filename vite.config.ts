@@ -11,9 +11,9 @@ export default defineConfig({
       manifest: {
         name: 'Budget',
         short_name: 'Budget',
-        description: 'Personal weekly budget tracker',
-        theme_color: '#18181b',
-        background_color: '#18181b',
+        description: 'Personal finance dashboard',
+        theme_color: '#f5f5f7',
+        background_color: '#f5f5f7',
         display: 'standalone',
         start_url: '/',
         scope: '/',

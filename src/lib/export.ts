@@ -1,4 +1,4 @@
-import type { Account, BalanceSnapshot, Subscription, Goal } from './supabase'
+import type { Account, BalanceSnapshot, Subscription, Goal, GoalContribution } from './supabase'
 import { formatMoney } from './money'
 import { format, parseISO } from 'date-fns'
 
@@ -77,4 +77,22 @@ export function exportGoals(goals: Goal[]) {
     ])
   )
   downloadCSV(`goals-${format(new Date(), 'yyyy-MM-dd')}.csv`, [header, ...rows])
+}
+
+export function exportContributions(contributions: GoalContribution[], goals: Goal[]) {
+  const goalMap = new Map(goals.map(g => [g.id, g.name]))
+  const header = csvRow(['Goal', 'Amount', 'Date', 'Source', 'Note'])
+  const rows = contributions
+    .slice()
+    .sort((a, b) => b.occurred_on.localeCompare(a.occurred_on))
+    .map(c =>
+      csvRow([
+        goalMap.get(c.goal_id) ?? c.goal_id,
+        formatMoney(c.amount_cents),
+        c.occurred_on,
+        c.source,
+        c.note ?? ''
+      ])
+    )
+  downloadCSV(`contributions-${format(new Date(), 'yyyy-MM-dd')}.csv`, [header, ...rows])
 }

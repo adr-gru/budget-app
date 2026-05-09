@@ -1,7 +1,14 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import type { Account } from '../lib/supabase'
-import { ACCOUNT_TYPE_META } from '../lib/accountTypes'
+import { CARD_GRADIENTS } from '../lib/tokens'
 import { formatMoney } from '../lib/money'
+
+const TYPE_LABEL: Record<string, string> = {
+  credit_card: 'Credit Card',
+  checking:    'Checking',
+  savings:     'Savings',
+  investment:  'Investment'
+}
 
 function daysUntilDue(dueDay: number): number {
   const today = new Date()
@@ -13,10 +20,10 @@ function daysUntilDue(dueDay: number): number {
 function lastUpdatedLabel(recordedAt: string | null): string | null {
   if (!recordedAt) return null
   const days = differenceInCalendarDays(new Date(), parseISO(recordedAt))
-  if (days === 0) return 'Updated today'
-  if (days === 1) return 'Updated yesterday'
-  if (days < 30) return `Updated ${days}d ago`
-  return `Updated ${Math.floor(days / 30)}mo ago`
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 30) return `${days}d ago`
+  return `${Math.floor(days / 30)}mo ago`
 }
 
 interface Props {
@@ -28,64 +35,88 @@ interface Props {
 }
 
 export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap }: Props) {
-  const meta = ACCOUNT_TYPE_META[account.type]
-  const hasActivity = delta !== null && delta !== 0
+  const gradient = CARD_GRADIENTS[account.type as keyof typeof CARD_GRADIENTS]
   const utilization = account.type === 'credit_card' && account.credit_limit_cents && balance !== null
     ? Math.round((balance / account.credit_limit_cents) * 100)
     : null
-  const dueDays = account.type === 'credit_card' && account.due_day
+  const dueDays = account.type === 'credit_card' && account.due_day != null
     ? daysUntilDue(account.due_day)
     : null
   const dueSoon = dueDays !== null && dueDays <= 5
   const updatedLabel = lastUpdatedLabel(lastSnapshotAt)
+  const hasActivity = delta !== null && delta !== 0
+  const isDebt = account.type === 'credit_card'
 
   return (
     <button
       onClick={onTap}
-      className="w-full card px-4 py-3.5 flex items-center gap-3 text-left active:bg-elev transition-colors"
+      className="wallet-card w-full text-left"
+      style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
     >
-      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: meta.color }} />
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-text truncate">{account.name}</p>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          {utilization !== null && (
-            <span className={`text-xs ${utilization >= 80 ? 'text-danger' : utilization >= 30 ? 'text-[#fbbf24]' : 'text-muted'}`}>
-              {utilization}% used
-            </span>
-          )}
-          {account.credit_limit_cents && balance !== null && (
-            <span className="text-xs text-muted">
-              {formatMoney(account.credit_limit_cents - balance)} avail.
-            </span>
-          )}
-          {dueDays !== null && (
-            <span className={`text-xs ${dueSoon ? 'text-danger font-medium' : 'text-muted'}`}>
-              Due in {dueDays}d
-            </span>
-          )}
-          {!utilization && !dueDays && updatedLabel && (
-            <span className="text-xs text-muted">{updatedLabel}</span>
-          )}
+      <div className="relative p-5 flex flex-col" style={{ minHeight: '160px' }}>
+        {/* Top row: name + type */}
+        <div className="flex items-start justify-between mb-auto">
+          <p className="text-sm font-semibold text-white truncate mr-2 leading-snug">{account.name}</p>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-white/70 flex-shrink-0 mt-0.5">
+            {TYPE_LABEL[account.type]}
+          </span>
         </div>
-        {(utilization !== null || dueDays !== null) && updatedLabel && (
-          <p className="text-xs text-muted mt-0.5">{updatedLabel}</p>
-        )}
-      </div>
 
-      <div className="text-right flex-shrink-0">
-        <p className="text-sm font-semibold tabular-nums text-text">
-          {balance !== null ? formatMoney(balance) : <span className="text-muted">—</span>}
-        </p>
-        {hasActivity && (
-          <p className={`text-xs tabular-nums mt-0.5 ${
-            meta.isDebt
-              ? delta! > 0 ? 'text-danger' : 'text-success'
-              : delta! > 0 ? 'text-success' : 'text-danger'
-          }`}>
-            {delta! > 0 ? '+' : ''}{formatMoney(delta!)}
+        {/* Balance */}
+        <div className="mt-4">
+          <p className="text-[11px] text-white/60 mb-0.5">
+            {account.type === 'credit_card' ? 'Balance owed' : 'Current balance'}
           </p>
-        )}
+          <p className="text-3xl font-bold tabular-nums text-white leading-none">
+            {balance !== null ? formatMoney(balance) : '—'}
+          </p>
+        </div>
+
+        {/* Bottom row */}
+        <div className="mt-3 flex items-end justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            {account.type === 'credit_card' && utilization !== null && account.credit_limit_cents && balance !== null ? (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-white/60">{formatMoney(account.credit_limit_cents - balance)} available</span>
+                  <span className={`text-[10px] font-semibold ${
+                    utilization >= 80 ? 'text-red-200' : utilization >= 50 ? 'text-yellow-100' : 'text-white/80'
+                  }`}>
+                    {utilization}% used
+                  </span>
+                </div>
+                <div className="h-1 bg-white/25 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(utilization, 100)}%`,
+                      background: utilization >= 80 ? 'rgba(255,150,150,0.9)' : 'rgba(255,255,255,0.75)'
+                    }}
+                  />
+                </div>
+              </div>
+            ) : updatedLabel ? (
+              <p className="text-[11px] text-white/60">Updated {updatedLabel}</p>
+            ) : null}
+          </div>
+
+          <div className="text-right flex-shrink-0">
+            {dueDays !== null && (
+              <p className={`text-xs font-semibold ${dueSoon ? 'text-red-200' : 'text-white/70'}`}>
+                {dueDays === 0 ? 'Due today' : `Due in ${dueDays}d`}
+              </p>
+            )}
+            {hasActivity && (
+              <p className={`text-xs tabular-nums font-medium mt-0.5 ${
+                isDebt
+                  ? delta! > 0 ? 'text-red-200' : 'text-green-200'
+                  : delta! > 0 ? 'text-green-200' : 'text-red-200'
+              }`}>
+                {delta! > 0 ? '+' : ''}{formatMoney(delta!)} this cycle
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     </button>
   )

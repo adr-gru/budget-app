@@ -1,15 +1,18 @@
 import { NavLink } from 'react-router-dom'
 
 const tabs = [
-  { to: '/',             label: 'Dashboard',     icon: IconHome },
-  { to: '/accounts',     label: 'Accounts',      icon: IconAccounts },
-  { to: '/subscriptions',label: 'Subscriptions', icon: IconSubs },
-  { to: '/settings',     label: 'Settings',      icon: IconSettings }
+  { to: '/',              label: 'Dashboard',     icon: IconHome },
+  { to: '/accounts',      label: 'Accounts',      icon: IconAccounts },
+  { to: '/subscriptions', label: 'Subscriptions', icon: IconSubs },
+  { to: '/settings',      label: 'Settings',      icon: IconSettings }
 ]
 
 export function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <nav
+      className="fixed bottom-0 left-0 right-0 bg-bg/85 backdrop-blur-xl border-t border-border z-50"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       <div className="flex">
         {tabs.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -18,7 +21,7 @@ export function BottomNav() {
             end={to === '/'}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-medium transition-colors ${
-                isActive ? 'text-text' : 'text-muted hover:text-subtle'
+                isActive ? 'text-accent' : 'text-muted hover:text-subtle'
               }`
             }
           >

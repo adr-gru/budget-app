@@ -1,8 +1,11 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { SignIn } from './auth/SignIn'
 import { AuthCallback } from './auth/AuthCallback'
+import { ForgotPassword } from './auth/ForgotPassword'
+import { ResetPassword } from './auth/ResetPassword'
 import { Dashboard } from './pages/Dashboard'
 import { Accounts } from './pages/Accounts'
 import { Subscriptions } from './pages/Subscriptions'
@@ -16,15 +19,38 @@ import { queryClient } from './lib/queryClient'
 import { isSupabaseConfigured } from './lib/supabase'
 import { useProfile } from './data/profile'
 import { useAutoLogout } from './hooks/useAutoLogout'
+import { usePushRegistration } from './hooks/usePushRegistration'
+import { useBiometricLock } from './hooks/useBiometricLock'
+import { BiometricLock } from './components/BiometricLock'
+import { isNative } from './lib/native'
+
+// Dynamic import — only resolves on native, never throws on web
+async function hideSplash() {
+  if (!isNative) return
+  try {
+    const { SplashScreen } = await import('@capacitor/splash-screen')
+    await SplashScreen.hide()
+  } catch {
+    // not running in Capacitor context
+  }
+}
 
 function AuthenticatedApp() {
   const { data: profile, isLoading } = useProfile()
+  const { locked, unlock } = useBiometricLock()
   useAutoLogout()
+  usePushRegistration()
+
+  useEffect(() => {
+    hideSplash()
+  }, [])
+
+  if (locked) return <BiometricLock onUnlock={unlock} />
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg">
-        <div className="w-4 h-4 rounded-full border-2 border-border border-t-subtle animate-spin" />
+        <div className="w-4 h-4 rounded-full border-2 border-border border-t-accent animate-spin" />
       </div>
     )
   }
@@ -52,12 +78,22 @@ function AuthenticatedApp() {
 }
 
 function AppRoutes() {
-  const { session, loading } = useAuth()
+  const { session, loading, recoveryPending } = useAuth()
+
+  // Password-reset link — user has a valid session but must set a new password.
+  // Short-circuit before the regular dashboard so they can't navigate away.
+  if (recoveryPending) {
+    return (
+      <Routes>
+        <Route path="*" element={<ResetPassword />} />
+      </Routes>
+    )
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg">
-        <div className="w-4 h-4 rounded-full border-2 border-border border-t-subtle animate-spin" />
+        <div className="w-4 h-4 rounded-full border-2 border-border border-t-accent animate-spin" />
       </div>
     )
   }
@@ -66,7 +102,8 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="*" element={<SignIn />} />
+        <Route path="/auth/forgot"   element={<ForgotPassword />} />
+        <Route path="*"              element={<SignIn />} />
       </Routes>
     )
   }

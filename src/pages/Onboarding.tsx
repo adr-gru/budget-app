@@ -55,7 +55,7 @@ export function Onboarding() {
       <div className="min-h-screen flex flex-col bg-bg px-6">
         <div className="flex-1 flex flex-col items-center justify-center text-center max-w-sm mx-auto w-full">
           <div className="w-14 h-14 rounded-2xl bg-elev flex items-center justify-center mb-6">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
               <line x1="12" y1="1" x2="12" y2="23"/>
               <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
             </svg>
@@ -129,9 +129,9 @@ export function Onboarding() {
 
           <div className="card px-4 py-0 mb-4">
             {[
-              { label: 'Needs',   hint: 'Housing, food, essentials', value: needsPct,    set: setNeedsPct,    color: '#60a5fa' },
-              { label: 'Wants',   hint: 'Entertainment, subscriptions', value: wantsPct, set: setWantsPct,    color: '#e879f9' },
-              { label: 'Savings', hint: 'Savings & investments', value: savingsPct,      set: setSavingsPct,  color: '#34d399' }
+              { label: 'Needs',   hint: 'Housing, food, essentials', value: needsPct,    set: setNeedsPct,    color: '#007aff' },
+              { label: 'Wants',   hint: 'Entertainment, subscriptions', value: wantsPct, set: setWantsPct,    color: '#af52de' },
+              { label: 'Savings', hint: 'Savings & investments', value: savingsPct,      set: setSavingsPct,  color: '#34c759' }
             ].map(({ label, hint, value, set, color }) => (
               <div key={label} className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
                 <div className="flex-1 min-w-0">

@@ -70,3 +70,26 @@ export interface Goal {
   sort_order: number
   created_at: string
 }
+
+export type ContributionSource = 'auto' | 'manual'
+export type DevicePlatform = 'ios' | 'android' | 'web'
+
+export interface GoalContribution {
+  id: string
+  goal_id: string
+  user_id: string
+  amount_cents: number
+  occurred_on: string
+  source: ContributionSource
+  snapshot_id: string | null
+  note: string | null
+  created_at: string
+}
+
+export interface DeviceToken {
+  id: string
+  user_id: string
+  token: string
+  platform: DevicePlatform
+  created_at: string
+}

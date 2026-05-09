@@ -6,10 +6,11 @@ import { useSubscriptions } from '../data/subscriptions'
 import { useGoals } from '../data/goals'
 import { useLatestBalances } from '../data/snapshots'
 import { parseCents, formatDollars, formatMoney } from '../lib/money'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { todayISO } from '../lib/cycle'
-import { exportAccounts, exportSubscriptions, exportGoals, exportSnapshots } from '../lib/export'
+import { exportAccounts, exportSubscriptions, exportGoals, exportSnapshots, exportContributions } from '../lib/export'
+import { isNative } from '../lib/native'
+import type { GoalContribution } from '../lib/supabase'
 
 function NumberField({
   label, hint, value, onSave, prefix, suffix,
@@ -52,9 +53,117 @@ function NumberField({
   )
 }
 
+function AllContributionsExport({ goals }: { goals: ReturnType<typeof useGoals>['data'] & object[] }) {
+  const typedGoals = (goals ?? []) as import('../lib/supabase').Goal[]
+  const [loading, setLoading] = useState(false)
+
+  async function handleExport() {
+    setLoading(true)
+    try {
+      const { supabase: sb } = await import('../lib/supabase')
+      const { data } = await sb.from('goal_contributions').select('*').order('occurred_on', { ascending: false })
+      if (data) exportContributions(data as GoalContribution[], typedGoals)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleExport}
+      disabled={loading}
+      className="w-full flex items-center justify-between px-4 py-3 border-b border-border last:border-0 text-left"
+    >
+      <div>
+        <p className="text-sm text-text">Export contributions</p>
+        <p className="text-xs text-muted mt-0.5">All goal contribution history</p>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+  )
+}
+
+function NativeSettings() {
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const { Preferences } = await import('@capacitor/preferences')
+      const { value } = await Preferences.get({ key: 'biometric_enabled' })
+      setBiometricEnabled(value === 'true')
+    }
+    load()
+  }, [])
+
+  async function toggleBiometric(enabled: boolean) {
+    const { Preferences } = await import('@capacitor/preferences')
+    await Preferences.set({ key: 'biometric_enabled', value: String(enabled) })
+    setBiometricEnabled(enabled)
+  }
+
+  async function togglePush(enabled: boolean) {
+    if (enabled) {
+      const { PushNotifications } = await import('@capacitor/push-notifications')
+      const perm = await PushNotifications.requestPermissions()
+      if (perm.receive === 'granted') {
+        await PushNotifications.register()
+        setPushEnabled(true)
+      }
+    } else {
+      const { supabase } = await import('../lib/supabase')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('device_tokens').delete().eq('user_id', user.id)
+      }
+      setPushEnabled(false)
+    }
+  }
+
+  return (
+    <div className="px-4 pt-5">
+      <p className="text-xs text-muted mb-3 uppercase tracking-wider">Native</p>
+      <div className="card px-4 py-0">
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <div>
+            <p className="text-sm text-text">Require Face ID to open</p>
+            <p className="text-xs text-muted mt-0.5">Lock app when it enters background</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={biometricEnabled}
+            onClick={() => toggleBiometric(!biometricEnabled)}
+            className={`relative w-11 h-6 rounded-full transition-colors ${biometricEnabled ? 'bg-accent' : 'bg-border'}`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${biometricEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between py-3">
+          <div>
+            <p className="text-sm text-text">Push notifications</p>
+            <p className="text-xs text-muted mt-0.5">Subscription renewals &amp; card due dates</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={pushEnabled}
+            onClick={() => togglePush(!pushEnabled)}
+            className={`relative w-11 h-6 rounded-full transition-colors ${pushEnabled ? 'bg-accent' : 'bg-border'}`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${pushEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function Settings() {
   const navigate = useNavigate()
-  const { session } = useAuth()
+  const { session, signOut } = useAuth()
   const { data: profile } = useProfile()
   const { data: accounts = [] } = useAccounts()
   const { data: subs = [] } = useSubscriptions()
@@ -155,6 +264,9 @@ export function Settings() {
         </button>
       </div>
 
+      {/* Native toggles — only rendered on iOS/Android */}
+      {isNative && <NativeSettings />}
+
       {/* Data export */}
       <div className="px-4 pt-5">
         <p className="text-xs text-muted mb-3 uppercase tracking-wider">Data</p>
@@ -181,6 +293,7 @@ export function Settings() {
               </svg>
             </button>
           ))}
+          <AllContributionsExport goals={goals as any} />
         </div>
       </div>
 
@@ -191,7 +304,7 @@ export function Settings() {
           <span className="text-sm text-subtle truncate">{session?.user.email}</span>
         </div>
         <button
-          onClick={() => supabase.auth.signOut()}
+          onClick={signOut}
           className="mt-3 w-full btn text-danger hover:text-danger border-border"
         >
           Sign out

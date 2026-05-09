@@ -4,7 +4,7 @@ interface Props {
 
 export function Skeleton({ className = '' }: Props) {
   return (
-    <div className={`animate-pulse bg-elev rounded ${className}`} />
+    <div className={`animate-pulse bg-border/60 rounded ${className}`} />
   )
 }
 

@@ -256,10 +256,10 @@ export function Dashboard() {
                     <p className="text-sm font-medium text-text">{goal.name}</p>
                     <span className="text-xs tabular-nums text-subtle">{pct}%</span>
                   </div>
-                  <div className="h-1.5 bg-elev rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-border/50 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, background: pct >= 100 ? '#34d399' : '#a78bfa' }}
+                      style={{ width: `${pct}%`, background: pct >= 100 ? '#34c759' : '#007aff' }}
                     />
                   </div>
                   <div className="flex items-center justify-between mt-1.5">

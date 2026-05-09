@@ -31,12 +31,12 @@ export function BucketCard({ bucket, pct, targetCents, actualCents }: Props) {
           </span>
         </div>
       </div>
-      <div className="h-1.5 bg-elev rounded-full overflow-hidden">
+      <div className="h-1.5 bg-border/50 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all"
           style={{
             width: `${ratio * 100}%`,
-            background: over ? '#f43f5e' : meta.color
+            background: over ? '#ff3b30' : meta.color
           }}
         />
       </div>

@@ -22,7 +22,7 @@ export function UpdateBalanceSheet({ account, currentBalance, onClose }: Props) 
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    await updateBalance.mutateAsync({ account_id: account.id, balance_cents: parseCents(value) })
+    await updateBalance.mutateAsync({ account_id: account.id, balance_cents: parseCents(value), account_type: account.type })
     onClose()
   }
 

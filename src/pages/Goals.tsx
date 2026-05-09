@@ -1,12 +1,122 @@
 import { useState } from 'react'
-import { differenceInCalendarMonths, format, parseISO } from 'date-fns'
+import { differenceInCalendarDays, differenceInCalendarMonths, format, formatDistanceToNow, parseISO } from 'date-fns'
 import { useGoals, useAddGoal, useUpdateGoal, useDeleteGoal } from '../data/goals'
 import { useAccounts } from '../data/accounts'
 import { useLatestBalances } from '../data/snapshots'
+import { useGoalContributions, useDeleteContribution } from '../data/contributions'
+import { ContributionSheet } from '../components/ContributionSheet'
 import { Sheet } from '../components/Sheet'
 import { formatMoney, parseCents, formatDollars } from '../lib/money'
 import { todayISO } from '../lib/cycle'
 import type { Goal } from '../lib/supabase'
+
+function paceLabel(
+  currentCents: number,
+  targetCents: number,
+  createdAt: string,
+  targetDate: string | null
+): { label: string; color: string } | null {
+  if (!targetDate || targetCents <= 0) return null
+
+  const now = new Date()
+  const end = parseISO(targetDate)
+  const start = parseISO(createdAt)
+  const totalDays = differenceInCalendarDays(end, start)
+  const elapsedDays = differenceInCalendarDays(now, start)
+  if (totalDays <= 0 || elapsedDays <= 0) return null
+
+  const expectedPct = Math.min(elapsedDays / totalDays, 1)
+  const actualPct = Math.min(currentCents / targetCents, 1)
+  const diff = actualPct - expectedPct
+
+  if (diff >= 0.05) return { label: 'Ahead of pace', color: '#34c759' }
+  if (diff >= -0.05) return { label: 'On pace', color: '#8e8e93' }
+  return { label: 'Behind pace', color: '#ff9500' }
+}
+
+function ContributionLog({
+  goalId,
+  goalName,
+  isLinked
+}: {
+  goalId: string
+  goalName: string
+  isLinked: boolean
+}) {
+  const { data: contributions = [], isLoading } = useGoalContributions(goalId)
+  const deleteContribution = useDeleteContribution()
+  const [showAdd, setShowAdd] = useState(false)
+
+  async function handleDelete(id: string) {
+    if (!confirm('Remove this contribution?')) return
+    await deleteContribution.mutateAsync({ id, goalId })
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-medium text-subtle">Contribution history</p>
+        {!isLinked && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="text-xs text-accent font-medium"
+          >
+            + Add
+          </button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <p className="text-xs text-muted">Loading…</p>
+      ) : contributions.length === 0 ? (
+        <p className="text-xs text-muted">No contributions yet.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {contributions.slice(0, 6).map(c => (
+            <div key={c.id} className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <span className="text-xs text-subtle">
+                  {format(parseISO(c.occurred_on), 'MMM d, yyyy')}
+                </span>
+                {c.note && (
+                  <span className="text-xs text-muted ml-1.5 truncate">· {c.note}</span>
+                )}
+                {c.source === 'auto' && (
+                  <span className="text-[10px] text-muted ml-1.5">auto</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <span className="text-xs font-medium text-success tabular-nums">
+                  +{formatMoney(c.amount_cents)}
+                </span>
+                <button
+                  onClick={() => handleDelete(c.id)}
+                  className="text-muted/60 hover:text-danger transition-colors"
+                  aria-label="Remove contribution"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+          {contributions.length > 6 && (
+            <p className="text-xs text-muted mt-0.5">{contributions.length - 6} more not shown</p>
+          )}
+        </div>
+      )}
+
+      {showAdd && (
+        <ContributionSheet
+          goalId={goalId}
+          goalName={goalName}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+    </div>
+  )
+}
 
 function GoalCard({
   goal,
@@ -19,6 +129,9 @@ function GoalCard({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const { data: contributions = [] } = useGoalContributions(goal.id)
+
   const progress = goal.target_cents > 0 ? Math.min(currentCents / goal.target_cents, 1) : 0
   const pct = Math.round(progress * 100)
   const over = currentCents >= goal.target_cents
@@ -28,21 +141,36 @@ function GoalCard({
     ? differenceInCalendarMonths(parseISO(goal.target_date), new Date())
     : null
 
+  const monthlyRequired = goal.target_date && !over && monthsLeft !== null && monthsLeft > 0
+    ? Math.ceil(remaining / monthsLeft)
+    : null
+
+  const pace = paceLabel(currentCents, goal.target_cents, goal.created_at, goal.target_date)
+
+  const lastContribution = contributions[0]
+
   return (
     <div className="card px-4 py-4">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-text">{goal.name}</p>
-          {goal.target_date && (
-            <p className="text-xs text-muted mt-0.5">
-              {over
-                ? 'Goal reached!'
-                : monthsLeft !== null && monthsLeft >= 0
-                ? `${monthsLeft} month${monthsLeft !== 1 ? 's' : ''} to go · ${format(parseISO(goal.target_date), 'MMM yyyy')}`
-                : `Target: ${format(parseISO(goal.target_date), 'MMM yyyy')}`
-              }
-            </p>
-          )}
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {goal.target_date && (
+              <p className="text-xs text-muted">
+                {over
+                  ? 'Goal reached!'
+                  : monthsLeft !== null && monthsLeft >= 0
+                  ? `${monthsLeft} month${monthsLeft !== 1 ? 's' : ''} · ${format(parseISO(goal.target_date), 'MMM yyyy')}`
+                  : `Target: ${format(parseISO(goal.target_date), 'MMM yyyy')}`
+                }
+              </p>
+            )}
+            {pace && !over && (
+              <span className="text-[10px] font-medium" style={{ color: pace.color }}>
+                {pace.label}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={onEdit} className="btn-ghost p-1.5">
@@ -54,11 +182,10 @@ function GoalCard({
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-2 bg-elev rounded-full overflow-hidden mb-2">
+      <div className="h-2 bg-border/50 rounded-full overflow-hidden mb-2">
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: over ? '#34d399' : '#a78bfa' }}
+          style={{ width: `${pct}%`, background: over ? '#34c759' : '#007aff' }}
         />
       </div>
 
@@ -66,14 +193,42 @@ function GoalCard({
         <span className="text-xs text-muted">
           {over ? '100% complete' : `${pct}% of ${formatMoney(goal.target_cents)}`}
         </span>
-        <span className="text-sm font-semibold tabular-nums" style={{ color: over ? '#34d399' : undefined }}>
+        <span className="text-sm font-semibold tabular-nums" style={{ color: over ? '#34c759' : undefined }}>
           {formatMoney(currentCents)}
           {!over && <span className="text-xs font-normal text-muted"> / {formatMoney(goal.target_cents)}</span>}
         </span>
       </div>
 
-      {!over && remaining > 0 && (
-        <p className="text-xs text-muted mt-1">{formatMoney(remaining)} to go</p>
+      {!over && (
+        <div className="flex items-center justify-between mt-1">
+          {remaining > 0 && (
+            <p className="text-xs text-muted">{formatMoney(remaining)} to go</p>
+          )}
+          {monthlyRequired !== null && (
+            <p className="text-xs text-muted">{formatMoney(monthlyRequired)}/mo needed</p>
+          )}
+        </div>
+      )}
+
+      {lastContribution && !expanded && (
+        <p className="text-xs text-muted mt-1.5">
+          Last: +{formatMoney(lastContribution.amount_cents)} · {formatDistanceToNow(parseISO(lastContribution.occurred_on), { addSuffix: true })}
+        </p>
+      )}
+
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="mt-2 text-xs text-accent font-medium"
+      >
+        {expanded ? 'Hide history' : 'View history'}
+      </button>
+
+      {expanded && (
+        <ContributionLog
+          goalId={goal.id}
+          goalName={goal.name}
+          isLinked={!!goal.linked_account_id}
+        />
       )}
     </div>
   )

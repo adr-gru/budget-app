@@ -8,12 +8,16 @@ drop table if exists transactions cascade;
 drop table if exists category_targets cascade;
 drop type  if exists category;
 
--- Drop v2 tables and types (clean slate)
+-- Drop v2.x tables and types (clean slate)
+drop table if exists goal_contributions cascade;
+drop table if exists device_tokens cascade;
 drop table if exists goals cascade;
 drop table if exists subscriptions cascade;
 drop table if exists account_balance_snapshots cascade;
 drop table if exists accounts cascade;
 drop table if exists profile cascade;
+drop type  if exists contribution_source;
+drop type  if exists device_platform;
 drop type  if exists account_type;
 drop type  if exists bucket;
 drop type  if exists sub_cadence;
@@ -120,6 +124,51 @@ create table goals (
 
 create index goals_user_idx on goals (user_id, sort_order);
 
+-- One goal per linked account per user (prevents double-counting auto contributions)
+create unique index goals_one_per_linked_account
+  on goals (user_id, linked_account_id)
+  where linked_account_id is not null;
+
+-- ============================================================
+-- goal_contributions
+-- Tracks deposits toward savings goals.
+-- source='auto': written when a linked savings account snapshot has a positive delta.
+-- source='manual': user-entered via UI.
+-- ============================================================
+create type contribution_source as enum ('auto', 'manual');
+
+create table goal_contributions (
+  id            uuid primary key default gen_random_uuid(),
+  goal_id       uuid not null references goals(id) on delete cascade,
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  amount_cents  integer not null check (amount_cents > 0),
+  occurred_on   date not null default current_date,
+  source        contribution_source not null default 'manual',
+  snapshot_id   uuid references account_balance_snapshots(id) on delete set null,
+  note          text,
+  created_at    timestamptz not null default now()
+);
+
+create index goal_contributions_goal_idx on goal_contributions (goal_id, occurred_on desc);
+create index goal_contributions_user_idx on goal_contributions (user_id);
+
+-- ============================================================
+-- device_tokens
+-- Stores APNs/FCM tokens for push notifications.
+-- ============================================================
+create type device_platform as enum ('ios', 'android', 'web');
+
+create table device_tokens (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  token       text not null,
+  platform    device_platform not null,
+  created_at  timestamptz not null default now(),
+  unique (user_id, token)
+);
+
+create index device_tokens_user_idx on device_tokens (user_id);
+
 -- ============================================================
 -- Row Level Security — all tables scoped to auth.uid() = user_id
 -- ============================================================
@@ -160,3 +209,17 @@ create policy "goals: own insert" on goals for insert with check (auth.uid() = u
 create policy "goals: own update" on goals for update
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "goals: own delete" on goals for delete using (auth.uid() = user_id);
+
+-- goal_contributions
+alter table goal_contributions enable row level security;
+create policy "contributions: own select" on goal_contributions for select using (auth.uid() = user_id);
+create policy "contributions: own insert" on goal_contributions for insert with check (auth.uid() = user_id);
+create policy "contributions: own update" on goal_contributions for update
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "contributions: own delete" on goal_contributions for delete using (auth.uid() = user_id);
+
+-- device_tokens
+alter table device_tokens enable row level security;
+create policy "tokens: own select" on device_tokens for select using (auth.uid() = user_id);
+create policy "tokens: own insert" on device_tokens for insert with check (auth.uid() = user_id);
+create policy "tokens: own delete" on device_tokens for delete using (auth.uid() = user_id);

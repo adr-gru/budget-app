@@ -20,7 +20,6 @@ export function Sheet({ onClose, children, maxHeight = '85vh', title }: Props) {
     setTimeout(onClose, 280)
   }, [onClose])
 
-  // Close on Escape key
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') close()
@@ -32,11 +31,11 @@ export function Sheet({ onClose, children, maxHeight = '85vh', title }: Props) {
   return (
     <>
       <div
-        className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={close}
       />
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border rounded-t-2xl overflow-y-auto transition-transform duration-[280ms] ease-out ${visible ? 'translate-y-0' : 'translate-y-full'}`}
+        className={`fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border rounded-t-2xl overflow-y-auto transition-transform duration-[280ms] ease-out shadow-sheet ${visible ? 'translate-y-0' : 'translate-y-full'}`}
         style={{ maxHeight, paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
       >
         {/* Drag handle */}

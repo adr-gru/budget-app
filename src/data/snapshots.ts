@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, format } from 'date-fns'
 import { supabase } from '../lib/supabase'
-import type { BalanceSnapshot } from '../lib/supabase'
+import type { AccountType, BalanceSnapshot } from '../lib/supabase'
 import { cycleEnd } from '../lib/cycle'
 
 // Latest balance per account: fetch all snapshots ordered desc, dedupe by account_id
@@ -86,7 +86,15 @@ export function computeActivity(
 export function useUpdateBalance() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ account_id, balance_cents }: { account_id: string; balance_cents: number }) => {
+    mutationFn: async ({
+      account_id,
+      balance_cents,
+      account_type
+    }: {
+      account_id: string
+      balance_cents: number
+      account_type: AccountType
+    }) => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
       const { data, error } = await supabase
@@ -95,7 +103,42 @@ export function useUpdateBalance() {
         .select()
         .single()
       if (error) throw error
-      return data as BalanceSnapshot
+      const newSnapshot = data as BalanceSnapshot
+
+      if (account_type === 'savings') {
+        const { data: recent } = await supabase
+          .from('account_balance_snapshots')
+          .select('balance_cents')
+          .eq('account_id', account_id)
+          .order('recorded_at', { ascending: false })
+          .limit(2)
+
+        if (recent && recent.length === 2) {
+          const delta = recent[0].balance_cents - recent[1].balance_cents
+          if (delta > 0) {
+            const { data: linkedGoal } = await supabase
+              .from('goals')
+              .select('id')
+              .eq('linked_account_id', account_id)
+              .eq('user_id', user.id)
+              .maybeSingle()
+
+            if (linkedGoal) {
+              await supabase.from('goal_contributions').insert({
+                goal_id: linkedGoal.id,
+                user_id: user.id,
+                amount_cents: delta,
+                occurred_on: format(new Date(), 'yyyy-MM-dd'),
+                source: 'auto',
+                snapshot_id: newSnapshot.id
+              })
+              qc.invalidateQueries({ queryKey: ['contributions', linkedGoal.id] })
+            }
+          }
+        }
+      }
+
+      return newSnapshot
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['snapshots'] })
   })
