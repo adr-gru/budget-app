@@ -11,6 +11,7 @@ import { BUCKETS, BUCKET_META } from '../lib/buckets'
 import { formatMoney, parseCents, formatDollars } from '../lib/money'
 import type { Bucket, SubCadence, Subscription } from '../lib/supabase'
 import type { SuggestedSubscription } from '../data/subscriptions'
+import { format } from 'date-fns'
 
 const CADENCE_OPTIONS: { value: SubCadence; label: string }[] = [
   { value: 'weekly',  label: 'Weekly'  },
@@ -25,6 +26,7 @@ export function Subscriptions() {
   const addSub      = useAddSubscription()
 
   const [editTarget, setEditTarget] = useState<Subscription | null>(null)
+  const [adding,     setAdding]     = useState(false)
   const deactivate = useDeactivateSubscription()
 
   async function handleAddSuggestion(s: SuggestedSubscription) {
@@ -67,6 +69,12 @@ export function Subscriptions() {
             <p className="font-mono text-xs text-muted mt-0.5 tabular-nums">{formatMoney(monthlyTotal)}/mo total</p>
           )}
         </div>
+        <button onClick={() => setAdding(true)} className="btn-ghost text-xs gap-1.5">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add
+        </button>
       </div>
 
       {isLoading ? (
@@ -75,32 +83,23 @@ export function Subscriptions() {
         </div>
       ) : (
         <>
-          {suggestions.length > 0 && (
-            <div className="px-4 lg:px-6 pt-6">
-              <p className="section-label mb-3">Detected recurring</p>
-              <div className="card px-4 py-0">
-                {suggestions.map((s, idx) => (
-                  <div
-                    key={s.name}
-                    className={`flex items-center gap-3 py-3.5 ${idx < suggestions.length - 1 ? 'border-b border-border' : ''}`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-text truncate">{s.name}</p>
-                      <p className="font-mono text-xs text-muted mt-0.5 tabular-nums capitalize">
-                        {formatMoney(s.amount_cents)} · {s.cadence} · {s.occurrences}× seen
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleAddSuggestion(s)}
-                      disabled={addSub.isPending}
-                      className="btn text-xs py-1.5 flex-shrink-0"
-                    >
-                      Add
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {suggestions.filter(s => s.source === 'recurring').length > 0 && (
+            <SuggestionGroup
+              title="Detected recurring"
+              items={suggestions.filter(s => s.source === 'recurring')}
+              onAdd={handleAddSuggestion}
+              isPending={addSub.isPending}
+            />
+          )}
+
+          {suggestions.filter(s => s.source === 'category').length > 0 && (
+            <SuggestionGroup
+              title="Possible subscriptions"
+              subtitle="Seen once in a subscription-like category"
+              items={suggestions.filter(s => s.source === 'category')}
+              onAdd={handleAddSuggestion}
+              isPending={addSub.isPending}
+            />
           )}
 
           {subs.length === 0 && suggestions.length === 0 && (
@@ -112,7 +111,10 @@ export function Subscriptions() {
                 </svg>
               </div>
               <p className="text-base font-display font-semibold text-text mb-1">No subscriptions yet</p>
-              <p className="text-sm text-muted max-w-xs">Import transactions to detect recurring subscriptions automatically.</p>
+              <p className="text-sm text-muted max-w-xs mb-4">Import transactions to detect recurring subscriptions automatically, or add one manually.</p>
+              <button onClick={() => setAdding(true)} className="btn text-sm px-5 py-2.5">
+                Add manually
+              </button>
             </div>
           )}
 
@@ -155,6 +157,54 @@ export function Subscriptions() {
           onClose={() => setEditTarget(null)}
         />
       )}
+
+      {adding && (
+        <SubscriptionSheet
+          existing={null}
+          onClose={() => setAdding(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function SuggestionGroup({
+  title, subtitle, items, onAdd, isPending
+}: {
+  title: string
+  subtitle?: string
+  items: SuggestedSubscription[]
+  onAdd: (s: SuggestedSubscription) => void
+  isPending: boolean
+}) {
+  return (
+    <div className="px-4 lg:px-6 pt-6">
+      <div className="mb-3">
+        <p className="section-label">{title}</p>
+        {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
+      </div>
+      <div className="card px-4 py-0">
+        {items.map((s, idx) => (
+          <div
+            key={s.name}
+            className={`flex items-center gap-3 py-3.5 ${idx < items.length - 1 ? 'border-b border-border' : ''}`}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text truncate">{s.name}</p>
+              <p className="font-mono text-xs text-muted mt-0.5 tabular-nums capitalize">
+                {formatMoney(s.amount_cents)} · {s.cadence} · {s.occurrences}× seen
+              </p>
+            </div>
+            <button
+              onClick={() => onAdd(s)}
+              disabled={isPending}
+              className="btn text-xs py-1.5 flex-shrink-0"
+            >
+              Add
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -162,34 +212,50 @@ export function Subscriptions() {
 function SubscriptionSheet({
   existing, onClose
 }: {
-  existing: Subscription
+  existing: Subscription | null
   onClose: () => void
 }) {
   const updateSub = useUpdateSubscription()
+  const addSub    = useAddSubscription()
 
-  const [name,     setName]     = useState(existing.name)
-  const [amount,   setAmount]   = useState(formatDollars(existing.amount_cents))
-  const [cadence,  setCadence]  = useState<SubCadence>(existing.cadence)
-  const [bucket,   setBucket]   = useState<Bucket>(existing.bucket)
-  const [nextDate, setNextDate] = useState(existing.next_charge_on)
+  const today = format(new Date(), 'yyyy-MM-dd')
+
+  const [name,     setName]     = useState(existing?.name     ?? '')
+  const [amount,   setAmount]   = useState(existing ? formatDollars(existing.amount_cents) : '')
+  const [cadence,  setCadence]  = useState<SubCadence>(existing?.cadence  ?? 'monthly')
+  const [bucket,   setBucket]   = useState<Bucket>(existing?.bucket   ?? 'wants')
+  const [nextDate, setNextDate] = useState(existing?.next_charge_on ?? today)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     const cents = parseCents(amount)
     if (cents <= 0) return
-    await updateSub.mutateAsync({
-      id: existing.id,
-      name: name.trim(),
-      amount_cents: cents,
-      cadence,
-      bucket,
-      next_charge_on: nextDate
-    })
+
+    if (existing) {
+      await updateSub.mutateAsync({
+        id: existing.id,
+        name: name.trim(),
+        amount_cents: cents,
+        cadence,
+        bucket,
+        next_charge_on: nextDate
+      })
+    } else {
+      await addSub.mutateAsync({
+        name: name.trim(),
+        amount_cents: cents,
+        cadence,
+        bucket,
+        next_charge_on: nextDate
+      })
+    }
     onClose()
   }
 
+  const isPending = existing ? updateSub.isPending : addSub.isPending
+
   return (
-    <Sheet onClose={onClose} title="Edit subscription" maxHeight="90vh">
+    <Sheet onClose={onClose} title={existing ? 'Edit subscription' : 'New subscription'} maxHeight="90vh">
       <form onSubmit={submit} className="px-5 pb-5 flex flex-col gap-4">
         <div>
           <label className="text-xs text-muted block mb-1.5">Name</label>
@@ -275,10 +341,10 @@ function SubscriptionSheet({
 
         <button
           type="submit"
-          disabled={updateSub.isPending || !name.trim()}
+          disabled={isPending || !name.trim()}
           className="btn-primary py-3 mt-1"
         >
-          {updateSub.isPending ? 'Saving…' : 'Save changes'}
+          {isPending ? 'Saving…' : existing ? 'Save changes' : 'Add subscription'}
         </button>
       </form>
     </Sheet>

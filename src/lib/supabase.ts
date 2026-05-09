@@ -94,6 +94,9 @@ export interface Transaction {
   plaid_transaction_id:  string | null
   amount_cents:          number
   description:           string
+  merchant_name:         string | null
+  pfc_primary:           string | null
+  pfc_detailed:          string | null
   date:                  string
   bucket:                TransactionBucket
   tag:                   string | null

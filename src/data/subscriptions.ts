@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import type { Bucket, SubCadence, Subscription } from '../lib/supabase'
 import { cycleEnd } from '../lib/cycle'
 import { useTransactions } from './transactions'
-import { detectSubscriptions, normalizeDescription, type SuggestedSubscription } from '../lib/detectSubscriptions'
+import { detectSubscriptions, detectByCategory, normalizeDescription, type SuggestedSubscription } from '../lib/detectSubscriptions'
 
 export type { SuggestedSubscription }
 
@@ -117,6 +117,9 @@ export function useSuggestedSubscriptions() {
 
   return useMemo(() => {
     const existingNormalized = new Set(subs.map(s => normalizeDescription(s.name)))
-    return detectSubscriptions(transactions, existingNormalized)
+    const recurring = detectSubscriptions(transactions, existingNormalized)
+    const recurringKeys = new Set(recurring.map(r => normalizeDescription(r.name)))
+    const categoryHints = detectByCategory(transactions, new Set([...existingNormalized, ...recurringKeys]))
+    return [...recurring, ...categoryHints]
   }, [transactions, subs])
 }

@@ -72,9 +72,9 @@ Deno.serve(async (req: Request) => {
     const plaidEnv  = Deno.env.get('PLAID_ENV') ?? 'development'
     const plaidBase = `https://${plaidEnv}.plaid.com`
 
-    // Last 30 days
+    // Up to 24 months of history (Plaid backfills this in the background after link)
     const endDate   = new Date()
-    const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const startDate = new Date(endDate.getTime() - 730 * 24 * 60 * 60 * 1000)
     const fmt = (d: Date) => d.toISOString().split('T')[0]
 
     let imported = 0
@@ -132,6 +132,9 @@ Deno.serve(async (req: Request) => {
             plaid_transaction_id: tx.transaction_id as string,
             amount_cents: amountCents,
             description: (tx.merchant_name ?? tx.name ?? '') as string,
+            merchant_name: (tx.merchant_name ?? null) as string | null,
+            pfc_primary: primary || null,
+            pfc_detailed: detailed || null,
             date: tx.date as string,
             bucket: categorizePlaid(primary, detailed),
             category_override: false,
@@ -171,6 +174,9 @@ Deno.serve(async (req: Request) => {
           .from('transactions')
           .update({
             description: r.description,
+            merchant_name: r.merchant_name,
+            pfc_primary: r.pfc_primary,
+            pfc_detailed: r.pfc_detailed,
             amount_cents: r.amount_cents,
             date: r.date,
           })
