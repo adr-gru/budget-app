@@ -5,6 +5,7 @@
 @layer base {
   html, body, #root {
     height: 100%;
+    overflow-x: hidden;
   }
   body {
     background-color: theme('colors.bg');
@@ -12,6 +13,7 @@
     font-family: theme('fontFamily.sans');
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    touch-action: pan-y;
   }
   input, button, select, textarea {
     font: inherit;
