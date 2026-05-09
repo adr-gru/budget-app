@@ -4,11 +4,14 @@ import { useAccounts } from '../data/accounts'
 import { useSubscriptions } from '../data/subscriptions'
 import { useGoals } from '../data/goals'
 import { useLatestBalances } from '../data/snapshots'
+import { usePasskeyCredentials, useDeletePasskey } from '../data/passkeys'
 import { parseCents, formatDollars, formatMoney } from '../lib/money'
 import { useAuth } from '../auth/AuthProvider'
 import { todayISO } from '../lib/cycle'
 import { exportAccounts, exportSubscriptions, exportGoals, exportSnapshots, exportContributions } from '../lib/export'
 import { isNative } from '../lib/native'
+import { usePasskey, passkeySupported } from '../hooks/usePasskey'
+import { format, parseISO } from 'date-fns'
 import type { GoalContribution } from '../lib/supabase'
 
 function NumberField({
@@ -98,11 +101,11 @@ function Toggle({
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative w-11 h-6 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
-        checked ? 'bg-accent' : 'bg-border'
+        checked ? 'bg-accent' : 'bg-muted/40'
       }`}
     >
       <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-        checked ? 'translate-x-5' : 'translate-x-0.5'
+        checked ? 'translate-x-[22px]' : 'translate-x-0.5'
       }`} />
     </button>
   )
@@ -163,6 +166,71 @@ function NativeSettings() {
           </div>
           <Toggle checked={pushEnabled} onChange={togglePush} />
         </div>
+      </div>
+    </div>
+  )
+}
+
+function WebSettings() {
+  const { data: passkeys = [] } = usePasskeyCredentials()
+  const deletePasskey = useDeletePasskey()
+  const { register } = usePasskey()
+  const [registering, setRegistering] = useState(false)
+  const [regError, setRegError] = useState<string | null>(null)
+
+  async function handleRegister() {
+    setRegistering(true)
+    setRegError(null)
+    try {
+      await register()
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string }
+      if (e?.name !== 'NotAllowedError') setRegError(e?.message ?? 'Registration failed')
+    } finally {
+      setRegistering(false)
+    }
+  }
+
+  return (
+    <div className="px-4 lg:px-6 pt-6">
+      <p className="section-label mb-3">Passkeys</p>
+      <div className="card px-4 py-0">
+        {passkeys.map(p => (
+          <div key={p.id} className="flex items-center justify-between py-3.5 border-b border-border">
+            <div>
+              <p className="text-sm text-text">{p.device_name ?? 'Passkey'}</p>
+              <p className="text-xs text-muted mt-0.5">
+                Added {format(parseISO(p.created_at), 'MMM d, yyyy')}
+              </p>
+            </div>
+            <button
+              onClick={() => deletePasskey.mutate(p.id)}
+              disabled={deletePasskey.isPending}
+              className="text-xs text-danger hover:text-danger/80 transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={handleRegister}
+          disabled={registering}
+          className="w-full flex items-center justify-between py-3.5 text-left hover:bg-elev/30 transition-colors"
+        >
+          <div>
+            <p className="text-sm text-text">
+              {passkeys.length === 0 ? 'Add passkey for this browser' : 'Add another passkey'}
+            </p>
+            <p className="text-xs text-muted mt-0.5">Sign in with Face ID, Touch ID, or fingerprint</p>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        {regError && (
+          <p className="text-xs text-danger pb-3 -mt-1">{regError}</p>
+        )}
       </div>
     </div>
   )
@@ -255,6 +323,9 @@ export function Settings() {
 
       {/* Native toggles */}
       {isNative && <NativeSettings />}
+
+      {/* Web passkeys */}
+      {!isNative && passkeySupported && <WebSettings />}
 
       {/* Data export */}
       <div className="px-4 lg:px-6 pt-6">

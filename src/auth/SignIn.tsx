@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { usePasskey, passkeySupported } from '../hooks/usePasskey'
+import { isNative } from '../lib/native'
 
 type Mode = 'signin' | 'signup'
 
@@ -21,8 +23,25 @@ export function SignIn() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [verifyPending, setVerifyPending] = useState(false)
+  const [passkeyLoading, setPasskeyLoading] = useState(false)
+  const { authenticate } = usePasskey()
 
   const pwValidation = mode === 'signup' && password ? validatePassword(password) : null
+
+  async function signInWithPasskey() {
+    setPasskeyLoading(true)
+    setError(null)
+    try {
+      await authenticate()
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string }
+      if (e?.name !== 'NotAllowedError') {
+        setError(e?.message ?? 'Passkey sign-in failed')
+      }
+    } finally {
+      setPasskeyLoading(false)
+    }
+  }
 
   function switchMode(m: Mode) {
     setMode(m)
@@ -193,6 +212,27 @@ export function SignIn() {
             </button>
           )}
         </form>
+
+        {mode === 'signin' && !isNative && passkeySupported && (
+          <>
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <button
+              type="button"
+              onClick={signInWithPasskey}
+              disabled={passkeyLoading}
+              className="btn w-full flex items-center justify-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              {passkeyLoading ? 'Signing in…' : 'Sign in with passkey'}
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
