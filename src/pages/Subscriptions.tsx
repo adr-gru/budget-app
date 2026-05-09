@@ -23,7 +23,6 @@ export function Subscriptions() {
   const suggestions = useSuggestedSubscriptions()
   const addSub      = useAddSubscription()
 
-  const [showAdd, setShowAdd] = useState(false)
   const [editTarget, setEditTarget] = useState<Subscription | null>(null)
   const deactivate = useDeactivateSubscription()
 
@@ -68,9 +67,6 @@ export function Subscriptions() {
             <p className="text-xs text-muted mt-0.5">{formatMoney(monthlyTotal)}/mo total</p>
           )}
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn text-sm gap-1.5">
-          <span className="text-base leading-none">+</span> Add
-        </button>
       </div>
 
       {suggestions.length > 0 && (
@@ -107,7 +103,7 @@ export function Subscriptions() {
         <div className="px-4 pt-5">
           <div className="card px-4 py-4 text-center">
             <p className="text-sm text-subtle">No subscriptions yet.</p>
-            <p className="text-xs text-muted mt-1">Track Netflix, Spotify, rent — anything that recurs. Import transactions to detect them automatically.</p>
+            <p className="text-xs text-muted mt-1">Import transactions to detect recurring subscriptions automatically.</p>
           </div>
         </div>
       )}
@@ -140,7 +136,6 @@ export function Subscriptions() {
         )
       })}
 
-      {showAdd && <SubscriptionSheet onClose={() => setShowAdd(false)} />}
       {editTarget && (
         <SubscriptionSheet
           existing={editTarget}
@@ -155,45 +150,31 @@ function SubscriptionSheet({
   existing,
   onClose
 }: {
-  existing?: Subscription
+  existing: Subscription
   onClose: () => void
 }) {
-  const addSub    = useAddSubscription()
   const updateSub = useUpdateSubscription()
 
-  const [name,    setName]    = useState(existing?.name ?? '')
-  const [amount,  setAmount]  = useState(existing ? formatDollars(existing.amount_cents) : '')
-  const [cadence, setCadence] = useState<SubCadence>(existing?.cadence ?? 'monthly')
-  const [bucket,  setBucket]  = useState<Bucket>(existing?.bucket ?? 'wants')
-  const [nextDate, setNextDate] = useState(existing?.next_charge_on ?? todayISO())
+  const [name,    setName]    = useState(existing.name)
+  const [amount,  setAmount]  = useState(formatDollars(existing.amount_cents))
+  const [cadence, setCadence] = useState<SubCadence>(existing.cadence)
+  const [bucket,  setBucket]  = useState<Bucket>(existing.bucket)
+  const [nextDate, setNextDate] = useState(existing.next_charge_on)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     const cents = parseCents(amount)
     if (cents <= 0) return
-
-    if (existing) {
-      await updateSub.mutateAsync({
-        id: existing.id,
-        name: name.trim(),
-        amount_cents: cents,
-        cadence,
-        bucket,
-        next_charge_on: nextDate
-      })
-    } else {
-      await addSub.mutateAsync({
-        name: name.trim(),
-        amount_cents: cents,
-        cadence,
-        bucket,
-        next_charge_on: nextDate
-      })
-    }
+    await updateSub.mutateAsync({
+      id: existing.id,
+      name: name.trim(),
+      amount_cents: cents,
+      cadence,
+      bucket,
+      next_charge_on: nextDate
+    })
     onClose()
   }
-
-  const isPending = addSub.isPending || updateSub.isPending
 
   return (
     <>
@@ -202,9 +183,7 @@ function SubscriptionSheet({
         className="fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border rounded-t-xl px-4 pt-5 overflow-y-auto"
         style={{ maxHeight: '90vh', paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
       >
-        <p className="text-base font-semibold text-text mb-5">
-          {existing ? 'Edit subscription' : 'Add subscription'}
-        </p>
+        <p className="text-base font-semibold text-text mb-5">Edit subscription</p>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div>
@@ -291,10 +270,10 @@ function SubscriptionSheet({
 
           <button
             type="submit"
-            disabled={isPending || !name.trim()}
+            disabled={updateSub.isPending || !name.trim()}
             className="btn-primary py-3 mt-1"
           >
-            {isPending ? 'Saving…' : existing ? 'Save changes' : 'Add subscription'}
+            {updateSub.isPending ? 'Saving…' : 'Save changes'}
           </button>
         </form>
       </div>

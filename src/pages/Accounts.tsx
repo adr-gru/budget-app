@@ -41,6 +41,7 @@ export function Accounts() {
   const [editTarget,    setEditTarget]    = useState<Account | null>(null)
   const [connectTarget, setConnectTarget] = useState<Account | null>(null)
   const [showAdd,       setShowAdd]       = useState(false)
+  const [showManage,    setShowManage]    = useState(false)
 
   const hasLinked = accounts.some(a => a.teller_enrollment_id)
 
@@ -72,8 +73,8 @@ export function Accounts() {
               {tellerSync.isPending ? 'Syncing…' : 'Sync'}
             </button>
           )}
-          <button onClick={() => setShowAdd(true)} className="btn text-sm gap-1.5">
-            <span className="text-base leading-none">+</span> Add
+          <button onClick={() => setShowManage(true)} className="btn text-sm">
+            Manage
           </button>
         </div>
       </div>
@@ -136,8 +137,98 @@ export function Accounts() {
         />
       )}
 
+      {showManage && (
+        <ManageAccountsSheet
+          accounts={accounts}
+          onClose={() => setShowManage(false)}
+          onConnectNew={() => { setShowManage(false); setShowAdd(true) }}
+        />
+      )}
+
       {showAdd && <AddViaBankSheet onClose={() => setShowAdd(false)} />}
     </div>
+  )
+}
+
+// ─── Manage Accounts Sheet ────────────────────────────────────────────────────
+
+function ManageAccountsSheet({
+  accounts,
+  onClose,
+  onConnectNew
+}: {
+  accounts: Account[]
+  onClose: () => void
+  onConnectNew: () => void
+}) {
+  const [ordered, setOrdered] = useState(() => [...accounts])
+  const updateAccount = useUpdateAccount()
+
+  function move(idx: number, direction: -1 | 1) {
+    const to = idx + direction
+    if (to < 0 || to >= ordered.length) return
+    const next = [...ordered]
+    ;[next[idx], next[to]] = [next[to], next[idx]]
+    setOrdered(next)
+    updateAccount.mutate({ id: next[idx].id, sort_order: idx })
+    updateAccount.mutate({ id: next[to].id, sort_order: to })
+  }
+
+  return (
+    <Sheet onClose={onClose} title="Manage accounts" maxHeight="90vh">
+      <div className="px-4 pb-4 flex flex-col gap-2">
+        {ordered.map((account, i) => {
+          const meta = ACCOUNT_TYPE_META[account.type]
+          return (
+            <div key={account.id} className="card px-4 py-3 flex items-center gap-3">
+              <div className="flex flex-col gap-0.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0}
+                  className="p-0.5 text-muted disabled:opacity-25 active:text-text transition-colors"
+                  aria-label="Move up"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15"/>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(i, 1)}
+                  disabled={i === ordered.length - 1}
+                  className="p-0.5 text-muted disabled:opacity-25 active:text-text transition-colors"
+                  aria-label="Move down"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text truncate">{account.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: meta.color }}>{meta.label}</p>
+              </div>
+              {account.teller_enrollment_id && (
+                <div className="w-1.5 h-1.5 rounded-full bg-success flex-shrink-0" />
+              )}
+            </div>
+          )
+        })}
+        <button
+          type="button"
+          onClick={onConnectNew}
+          className="card px-4 py-3 flex items-center gap-3 w-full text-left active:opacity-70 transition-opacity"
+        >
+          <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#007aff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-accent">Connect new account</p>
+        </button>
+      </div>
+    </Sheet>
   )
 }
 

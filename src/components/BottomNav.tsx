@@ -5,6 +5,7 @@ const tabs = [
   { to: '/accounts',      label: 'Accounts',      icon: IconAccounts },
   { to: '/transactions',  label: 'Transactions',  icon: IconTransactions },
   { to: '/subscriptions', label: 'Subscriptions', icon: IconSubs },
+  { to: '/goals',         label: 'Goals',         icon: IconGoals },
   { to: '/settings',      label: 'Settings',      icon: IconSettings }
 ]
 
@@ -75,6 +76,16 @@ function IconSubs() {
       <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
       <polyline points="7 23 3 19 7 15"/>
       <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+    </svg>
+  )
+}
+
+function IconGoals() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="12" r="6"/>
+      <circle cx="12" cy="12" r="2"/>
     </svg>
   )
 }
