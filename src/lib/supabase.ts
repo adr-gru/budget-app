@@ -56,6 +56,10 @@ export interface Account {
   teller_enrollment_id:    string | null
   teller_institution_name: string | null
   teller_last_synced_at:   string | null
+  plaid_account_id:        string | null
+  plaid_item_id:           string | null
+  plaid_institution_name:  string | null
+  plaid_last_synced_at:    string | null
 }
 
 export interface BalanceSnapshot {
@@ -74,11 +78,20 @@ export interface TellerEnrollment {
   created_at:          string
 }
 
+export interface PlaidItem {
+  id:               string
+  user_id:          string
+  plaid_item_id:    string
+  institution_name: string | null
+  created_at:       string
+}
+
 export interface Transaction {
   id:                    string
   user_id:               string
   account_id:            string | null
   teller_transaction_id: string | null
+  plaid_transaction_id:  string | null
   amount_cents:          number
   description:           string
   date:                  string

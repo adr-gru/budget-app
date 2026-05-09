@@ -24,7 +24,7 @@ export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
   const annualCents = s.cadence === 'yearly' ? s.amount_cents : monthlyEquivalentCents(s) * 12
 
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-border last:border-0 hover:bg-bg/50 -mx-4 px-4 transition-colors">
+    <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-medium text-text truncate">{s.name}</p>
@@ -36,7 +36,7 @@ export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
           </span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          <p className={`text-xs ${renewingSoon ? 'text-warning font-medium' : 'text-muted'}`}>
+          <p className={`text-xs font-mono tabular-nums ${renewingSoon ? 'text-warning font-medium' : 'text-muted'}`}>
             {renewingSoon && daysUntil === 0
               ? 'Charges today'
               : renewingSoon
@@ -44,18 +44,18 @@ export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
               : `Next: ${format(nextDate, 'MMM d')}`}
           </p>
           <span className="text-xs text-muted">·</span>
-          <p className="text-xs text-muted">{formatMoney(annualCents)}/yr</p>
+          <p className="text-xs text-muted font-mono tabular-nums">{formatMoney(annualCents)}/yr</p>
         </div>
       </div>
-      <span className="text-sm font-semibold tabular-nums text-text flex-shrink-0">
+      <span className="font-mono text-sm font-semibold tabular-nums text-text flex-shrink-0">
         {formatMoney(s.amount_cents)}
         <span className="text-xs font-normal text-muted">{CADENCE_LABEL[s.cadence]}</span>
       </span>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <button onClick={onEdit} className="btn-ghost p-1.5" aria-label="Edit">
+      <div className="flex items-center gap-0.5 flex-shrink-0">
+        <button onClick={onEdit} className="btn-ghost p-2" aria-label="Edit">
           <IconEdit />
         </button>
-        <button onClick={onDelete} className="btn-ghost p-1.5 text-danger hover:text-danger" aria-label="Remove">
+        <button onClick={onDelete} className="btn-ghost p-2 text-danger hover:text-danger" aria-label="Remove">
           <IconTrash />
         </button>
       </div>

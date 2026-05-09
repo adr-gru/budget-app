@@ -31,10 +31,10 @@ export function ContributionSheet({ goalId, goalName, onClose }: Props) {
 
   return (
     <Sheet onClose={onClose} maxHeight="65vh">
-      <div className="px-4 pb-4">
+      <div className="px-5 pb-5">
         <div className="mb-5">
           <p className="text-xs text-accent font-medium mb-0.5">Log contribution</p>
-          <p className="text-base font-semibold text-text">{goalName}</p>
+          <p className="font-display text-base font-semibold text-text">{goalName}</p>
         </div>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div>
@@ -51,7 +51,7 @@ export function ContributionSheet({ goalId, goalName, onClose }: Props) {
                 placeholder="0.00"
                 autoFocus
                 required
-                className="field pl-7 text-base tabular-nums"
+                className="field pl-7 font-mono tabular-nums text-base"
               />
             </div>
           </div>

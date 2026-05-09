@@ -33,7 +33,6 @@ export function ResetPassword() {
       setError(err.message)
     } else {
       setDone(true)
-      // Sign out so recoveryPending clears and user signs in fresh with new password
       setTimeout(() => signOut(), 2000)
     }
   }
@@ -44,11 +43,11 @@ export function ResetPassword() {
         <div className="w-full max-w-sm">
           <div className="card p-8 text-center shadow-raised">
             <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
             </div>
-            <p className="text-text font-semibold">Password updated</p>
+            <p className="font-display text-lg font-semibold text-text">Password updated</p>
             <p className="text-muted text-sm mt-1">Signing you out — please sign in with your new password.</p>
           </div>
         </div>
@@ -60,7 +59,7 @@ export function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center bg-bg px-6">
       <div className="w-full max-w-sm">
         <div className="mb-8">
-          <h2 className="text-text text-xl font-semibold">Set new password</h2>
+          <h2 className="font-display text-2xl font-semibold text-text">Set new password</h2>
           <p className="text-muted text-sm mt-1">Choose a strong password for your account.</p>
         </div>
         <form onSubmit={submit} className="flex flex-col gap-3">
@@ -101,7 +100,11 @@ export function ResetPassword() {
             autoComplete="new-password"
             className="field"
           />
-          {error && <p className="text-danger text-xs">{error}</p>}
+          {error && (
+            <div className="px-3 py-2 bg-danger/10 border border-danger/20 rounded-md">
+              <p className="text-danger text-xs">{error}</p>
+            </div>
+          )}
           <button type="submit" disabled={loading} className="btn-primary py-3 mt-1">
             {loading ? 'Updating…' : 'Update password'}
           </button>

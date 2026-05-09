@@ -9,6 +9,7 @@ import type { BalanceSnapshot } from '../lib/supabase'
 import { currentCycleStart, cycleEnd, cycleLabel, cycleKey, prevCycle, todayISO } from '../lib/cycle'
 import { ACCOUNT_TYPE_META } from '../lib/accountTypes'
 import { formatMoney } from '../lib/money'
+import { Skeleton } from '../components/Skeleton'
 
 const CYCLES_TO_SHOW = 10
 
@@ -38,7 +39,6 @@ export function History() {
 
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  // Build list of past cycles (not including current)
   const currentStart = currentCycleStart(anchor)
   const pastCycles: Date[] = []
   let cs = prevCycle(currentStart)
@@ -52,117 +52,122 @@ export function History() {
   }
 
   return (
-    <div className="pb-24">
-      <div className="px-4 pt-12 pb-4 border-b border-border">
-        <h1 className="text-lg font-semibold text-text">History</h1>
+    <div className="pb-24 lg:pb-8">
+      <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border">
+        <h1 className="page-title">History</h1>
         <p className="text-xs text-muted mt-0.5">Past {CYCLES_TO_SHOW} pay periods</p>
       </div>
 
-      {isLoading && (
-        <div className="py-12 flex items-center justify-center">
-          <div className="w-4 h-4 rounded-full border-2 border-border border-t-subtle animate-spin" />
+      {isLoading ? (
+        <div className="px-4 lg:px-6 pt-4 flex flex-col gap-0">
+          {[0,1,2,3,4].map(i => (
+            <div key={i} className="py-4 border-b border-border">
+              <Skeleton className="h-4 w-36 mb-1.5" />
+              <Skeleton className="h-3 w-48" />
+            </div>
+          ))}
         </div>
-      )}
+      ) : (
+        pastCycles.map(cycleStart => {
+          const end = cycleEnd(cycleStart)
+          const key = cycleKey(cycleStart)
+          const isExpanded = expanded === key
 
-      {!isLoading && pastCycles.map(cycleStart => {
-        const end = cycleEnd(cycleStart)
-        const key = cycleKey(cycleStart)
-        const isExpanded = expanded === key
+          const windowStart = subDays(cycleStart, 16)
+          const windowSnaps = allSnapshots.filter(s => {
+            const t = new Date(s.recorded_at)
+            return t >= windowStart && t <= addDays(end, 1)
+          })
+          const activityMap = computeActivity(windowSnaps, cycleStart)
 
-        // Compute activity for this cycle
-        const windowStart = subDays(cycleStart, 16)
-        const windowSnaps = allSnapshots.filter(s => {
-          const t = new Date(s.recorded_at)
-          return t >= windowStart && t <= addDays(end, 1)
-        })
-        const activityMap = computeActivity(windowSnaps, cycleStart)
+          const typeActivity = (['credit_card', 'checking', 'savings', 'investment'] as const).reduce((acc, type) => {
+            const typeAccounts = accounts.filter(a => a.type === type)
+            const delta = typeAccounts.reduce((sum, a) => sum + (activityMap.get(a.id)?.delta ?? 0), 0)
+            if (delta !== 0) acc.push({ type, delta })
+            return acc
+          }, [] as { type: string; delta: number }[])
 
-        // Totals per account type
-        const typeActivity = (['credit_card', 'checking', 'savings', 'investment'] as const).reduce((acc, type) => {
-          const typeAccounts = accounts.filter(a => a.type === type)
-          const delta = typeAccounts.reduce((sum, a) => sum + (activityMap.get(a.id)?.delta ?? 0), 0)
-          if (delta !== 0) acc.push({ type, delta })
-          return acc
-        }, [] as { type: string; delta: number }[])
+          const hasData = activityMap.size > 0
 
-        const hasData = activityMap.size > 0
-
-        return (
-          <div key={key} className="border-b border-border">
-            <button
-              onClick={() => toggle(key)}
-              className="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
-            >
-              <div className="text-left">
-                <p className="text-sm font-medium text-text">{cycleLabel(cycleStart)}</p>
-                {!hasData && <p className="text-xs text-muted mt-0.5">No balance updates</p>}
-                {hasData && !isExpanded && (
-                  <div className="flex items-center gap-3 mt-0.5">
-                    {typeActivity.map(({ type, delta }) => {
-                      const meta = ACCOUNT_TYPE_META[type as keyof typeof ACCOUNT_TYPE_META]
-                      const isDebt = meta.isDebt
-                      return (
-                        <span key={type} className={`text-xs tabular-nums ${
-                          isDebt
-                            ? delta > 0 ? 'text-danger' : 'text-success'
-                            : delta > 0 ? 'text-success' : 'text-danger'
-                        }`}>
-                          {meta.label}: {delta > 0 ? '+' : ''}{formatMoney(delta)}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              <svg
-                width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                className={`text-muted transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+          return (
+            <div key={key} className="border-b border-border">
+              <button
+                onClick={() => toggle(key)}
+                className="w-full flex items-center justify-between px-4 lg:px-6 py-4 hover:bg-elev/30 transition-colors text-left"
               >
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-
-            {isExpanded && (
-              <div className="px-4 pb-3">
-                {!hasData ? (
-                  <p className="text-xs text-muted py-2">No balance updates recorded this period.</p>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {accounts
-                      .filter(a => activityMap.has(a.id))
-                      .map(a => {
-                        const act = activityMap.get(a.id)!
-                        const meta = ACCOUNT_TYPE_META[a.type]
+                <div>
+                  <p className="text-sm font-medium text-text">{cycleLabel(cycleStart)}</p>
+                  {!hasData && <p className="text-xs text-muted mt-0.5">No balance updates</p>}
+                  {hasData && !isExpanded && (
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      {typeActivity.map(({ type, delta }) => {
+                        const meta = ACCOUNT_TYPE_META[type as keyof typeof ACCOUNT_TYPE_META]
                         return (
-                          <div key={a.id} className="flex items-center justify-between py-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: meta.color }} />
-                              <span className="text-sm text-subtle">{a.name}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-sm tabular-nums text-text">{formatMoney(act.current)}</span>
-                              {act.delta !== 0 && (
-                                <span className={`text-xs tabular-nums ml-2 ${
-                                  meta.isDebt
-                                    ? act.delta > 0 ? 'text-danger' : 'text-success'
-                                    : act.delta > 0 ? 'text-success' : 'text-danger'
-                                }`}>
-                                  {act.delta > 0 ? '+' : ''}{formatMoney(act.delta)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                          <span key={type} className={`font-mono text-xs tabular-nums ${
+                            meta.isDebt
+                              ? delta > 0 ? 'text-danger' : 'text-success'
+                              : delta > 0 ? 'text-success' : 'text-danger'
+                          }`}>
+                            {meta.label}: {delta > 0 ? '+' : ''}{formatMoney(delta)}
+                          </span>
                         )
-                      })
-                    }
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })}
+                      })}
+                    </div>
+                  )}
+                </div>
+                <svg
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  className={`text-muted transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                >
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              {isExpanded && (
+                <div className="px-4 lg:px-6 pb-4">
+                  {!hasData ? (
+                    <p className="text-xs text-muted py-2">No balance updates recorded this period.</p>
+                  ) : (
+                    <div className="card px-4 py-0">
+                      {accounts
+                        .filter(a => activityMap.has(a.id))
+                        .map((a, idx, arr) => {
+                          const act  = activityMap.get(a.id)!
+                          const meta = ACCOUNT_TYPE_META[a.type]
+                          return (
+                            <div
+                              key={a.id}
+                              className={`flex items-center justify-between py-3 ${idx < arr.length - 1 ? 'border-b border-border' : ''}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: meta.color }} />
+                                <span className="text-sm text-subtle">{a.name}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-mono text-sm tabular-nums text-text">{formatMoney(act.current)}</span>
+                                {act.delta !== 0 && (
+                                  <span className={`font-mono text-xs tabular-nums ml-2 ${
+                                    meta.isDebt
+                                      ? act.delta > 0 ? 'text-danger' : 'text-success'
+                                      : act.delta > 0 ? 'text-success' : 'text-danger'
+                                  }`}>
+                                    {act.delta > 0 ? '+' : ''}{formatMoney(act.delta)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })
+      )}
     </div>
   )
 }

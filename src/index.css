@@ -9,9 +9,9 @@
   body {
     background-color: theme('colors.bg');
     color: theme('colors.text');
+    font-family: theme('fontFamily.sans');
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv11', 'ss01';
   }
   input, button, select, textarea {
     font: inherit;
@@ -31,38 +31,58 @@
   ::selection {
     background: theme('colors.border');
   }
+  :focus-visible {
+    outline: 2px solid theme('colors.accent');
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
   .field {
-    @apply w-full bg-surface border border-border rounded-md px-3 py-2 text-text placeholder:text-muted
-           focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors;
+    @apply w-full bg-surface border border-border rounded-md px-3 py-2.5 text-text
+           text-sm placeholder:text-muted
+           focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20
+           transition-colors min-h-[44px];
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium
-           border border-border bg-surface text-text hover:bg-elev transition-colors
-           disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5
+           text-sm font-medium border border-border bg-surface text-text
+           hover:bg-elev transition-colors min-h-[44px]
+           disabled:opacity-40 disabled:cursor-not-allowed
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium
-           bg-accent text-white hover:bg-accent/90 shadow-card transition-colors
-           disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5
+           text-sm font-medium bg-accent text-white
+           hover:bg-accent/90 shadow-card transition-colors min-h-[44px]
+           disabled:opacity-40 disabled:cursor-not-allowed
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium
-           text-subtle hover:text-text hover:bg-elev transition-colors;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2.5
+           text-sm font-medium text-muted hover:text-text hover:bg-elev
+           transition-colors min-h-[44px]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50;
   }
   .card {
     @apply bg-surface border border-border rounded-lg shadow-card;
   }
-  /* Full-bleed gradient card — set background inline with CARD_GRADIENTS token */
   .wallet-card {
-    @apply relative overflow-hidden rounded-2xl text-white shadow-raised
+    @apply relative overflow-hidden rounded-xl text-white shadow-raised
            active:scale-[0.98] transition-transform duration-150;
   }
   .wallet-card::before {
     content: '';
-    @apply absolute inset-0 rounded-2xl pointer-events-none;
-    background: linear-gradient(to bottom, rgba(255,255,255,0.15), transparent);
+    @apply absolute inset-0 rounded-xl pointer-events-none;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.12), transparent);
+  }
+  .section-label {
+    @apply text-xs font-medium text-muted uppercase tracking-wider;
+  }
+  .page-title {
+    @apply font-display text-2xl font-semibold text-text;
+  }
+  .money {
+    @apply font-mono tabular-nums;
   }
 }

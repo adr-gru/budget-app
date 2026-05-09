@@ -62,12 +62,12 @@ export function SignIn() {
         <div className="w-full max-w-sm">
           <div className="card p-8 text-center shadow-raised">
             <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                 <polyline points="22,6 12,13 2,6"/>
               </svg>
             </div>
-            <p className="text-text font-semibold mb-1">Check your email</p>
+            <p className="font-display text-lg font-semibold text-text mb-1">Check your email</p>
             <p className="text-subtle text-sm mt-1 leading-relaxed">
               We sent a verification link to <strong className="text-text">{email}</strong>.
               Click the link to activate your account.
@@ -77,7 +77,7 @@ export function SignIn() {
             </p>
             <button
               onClick={() => { setVerifyPending(false); switchMode('signin') }}
-              className="mt-5 text-sm text-accent font-medium"
+              className="mt-5 text-sm text-accent font-medium hover:text-accent/80 transition-colors"
             >
               Back to sign in
             </button>
@@ -90,16 +90,16 @@ export function SignIn() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg px-6">
       <div className="w-full max-w-sm">
-        {/* Logo + wordmark */}
+        {/* Logo */}
         <div className="mb-8 text-center">
           <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center mx-auto mb-4 shadow-raised">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="1" x2="12" y2="23"/>
               <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
             </svg>
           </div>
-          <h1 className="text-text text-xl font-semibold">Budget</h1>
-          <p className="text-muted text-sm mt-0.5">Personal finance dashboard</p>
+          <h1 className="font-display text-2xl font-semibold text-text">Budget</h1>
+          <p className="text-muted text-sm mt-1">Personal finance dashboard</p>
         </div>
 
         {/* Mode toggle */}
@@ -109,7 +109,7 @@ export function SignIn() {
               key={m}
               type="button"
               onClick={() => switchMode(m)}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+              className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${
                 mode === m
                   ? 'bg-surface text-text shadow-card'
                   : 'text-muted hover:text-subtle'
@@ -171,7 +171,11 @@ export function SignIn() {
             />
           )}
 
-          {error && <p className="text-danger text-xs">{error}</p>}
+          {error && (
+            <div className="px-3 py-2 bg-danger/10 border border-danger/20 rounded-md">
+              <p className="text-danger text-xs">{error}</p>
+            </div>
+          )}
 
           <button type="submit" disabled={loading} className="btn-primary py-3 mt-1">
             {loading

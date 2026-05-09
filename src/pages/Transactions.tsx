@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { format, parseISO, isToday, isYesterday } from 'date-fns'
 import { useTransactions, useUpdateTransaction } from '../data/transactions'
-import { useTellerImportTransactions } from '../data/teller'
+import { usePlaidImportTransactions } from '../data/plaid'
 import { useAccounts } from '../data/accounts'
 import { Sheet } from '../components/Sheet'
 import { Skeleton } from '../components/Skeleton'
@@ -9,10 +9,10 @@ import { formatMoney } from '../lib/money'
 import type { Transaction, TransactionBucket } from '../lib/supabase'
 
 const BUCKET_META: Record<TransactionBucket, { label: string; color: string; bg: string }> = {
-  needs:         { label: 'Needs',          color: '#3b82f6', bg: '#eff6ff' },
-  wants:         { label: 'Wants',          color: '#a855f7', bg: '#faf5ff' },
-  savings:       { label: 'Savings',        color: '#22c55e', bg: '#f0fdf4' },
-  uncategorized: { label: 'Uncategorized',  color: '#8e8e93', bg: '#f5f5f7' },
+  needs:         { label: 'Needs',         color: '#3B82F6', bg: '#EFF6FF' },
+  wants:         { label: 'Wants',         color: '#8B5CF6', bg: '#F5F3FF' },
+  savings:       { label: 'Savings',       color: '#16A34A', bg: '#F0FDF4' },
+  uncategorized: { label: 'Uncategorized', color: '#6B7280', bg: '#F3F4F6' },
 }
 
 function dateLabel(iso: string): string {
@@ -37,25 +37,25 @@ function groupByDate(txs: Transaction[]): Array<{ date: string; items: Transacti
 export function Transactions() {
   const { data: transactions = [], isLoading } = useTransactions()
   const { data: accounts = [] } = useAccounts()
-  const importTx = useTellerImportTransactions()
+  const importTx = usePlaidImportTransactions()
   const [editing, setEditing] = useState<Transaction | null>(null)
 
   const accountMap = new Map(accounts.map(a => [a.id, a.name]))
   const grouped    = groupByDate(transactions)
-  const hasLinked  = accounts.some(a => a.teller_enrollment_id)
+  const hasLinked  = accounts.some(a => a.plaid_item_id)
 
   return (
-    <div className="pb-24">
-      <div className="px-4 pt-12 pb-4 border-b border-border flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-text">Transactions</h1>
+    <div className="pb-24 lg:pb-8">
+      <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border flex items-center justify-between">
+        <h1 className="page-title">Transactions</h1>
         {hasLinked && (
           <button
             onClick={() => importTx.mutate()}
             disabled={importTx.isPending}
-            className="btn-ghost text-xs gap-1.5 py-1.5"
+            className="btn-ghost text-xs gap-1.5"
           >
             <svg
-              width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
               className={importTx.isPending ? 'animate-spin' : ''}
             >
@@ -68,30 +68,38 @@ export function Transactions() {
       </div>
 
       {isLoading ? (
-        <div className="px-4 pt-5 flex flex-col gap-3">
+        <div className="px-4 lg:px-6 pt-5 flex flex-col gap-3">
           {[0,1,2,3,4].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : transactions.length === 0 ? (
-        <div className="px-4 pt-10 text-center">
-          <p className="text-sm text-subtle mb-1">No transactions yet</p>
+        <div className="px-4 lg:px-6 pt-12 flex flex-col items-center text-center">
+          <div className="w-14 h-14 rounded-full bg-elev flex items-center justify-center mb-4">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+              <line x1="8" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+              <line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+          </div>
+          <p className="text-base font-display font-semibold text-text mb-1">No transactions yet</p>
           {hasLinked ? (
-            <p className="text-xs text-muted">Tap Import to pull the last 30 days from your linked accounts.</p>
+            <p className="text-sm text-muted">Tap Import to pull the last 30 days from your linked accounts.</p>
           ) : (
-            <p className="text-xs text-muted">Connect a bank account in Accounts to start syncing transactions.</p>
+            <p className="text-sm text-muted">Connect a bank account in Accounts to start syncing transactions.</p>
           )}
         </div>
       ) : (
         <div className="pb-4">
           {importTx.data && (
-            <div className="mx-4 mt-4 px-4 py-2 bg-success/10 rounded-lg">
-              <p className="text-xs text-success font-medium">
+            <div className="mx-4 lg:mx-6 mt-4 px-4 py-2.5 bg-success/10 rounded-lg border border-success/20">
+              <p className="text-sm text-success font-medium">
                 Imported {importTx.data.imported} new transaction{importTx.data.imported !== 1 ? 's' : ''}
               </p>
             </div>
           )}
           {grouped.map(({ date, items }) => (
-            <div key={date} className="px-4 pt-5">
-              <p className="text-xs text-muted mb-2 uppercase tracking-wider">{dateLabel(date)}</p>
+            <div key={date} className="px-4 lg:px-6 pt-5">
+              <p className="section-label mb-2.5">{dateLabel(date)}</p>
               <div className="card px-4 py-0">
                 {items.map((tx, idx) => {
                   const bm       = BUCKET_META[tx.bucket]
@@ -100,7 +108,7 @@ export function Transactions() {
                     <button
                       key={tx.id}
                       onClick={() => setEditing(tx)}
-                      className={`w-full flex items-center gap-3 py-3 text-left ${
+                      className={`w-full flex items-center gap-3 py-3.5 text-left hover:bg-elev/30 -mx-4 px-4 transition-colors ${
                         idx < items.length - 1 ? 'border-b border-border' : ''
                       }`}
                     >
@@ -124,7 +132,7 @@ export function Transactions() {
                           )}
                         </div>
                       </div>
-                      <span className="text-sm font-semibold tabular-nums text-text flex-shrink-0">
+                      <span className="font-mono text-sm font-semibold tabular-nums text-text flex-shrink-0">
                         {formatMoney(tx.amount_cents)}
                       </span>
                     </button>
@@ -146,13 +154,10 @@ export function Transactions() {
   )
 }
 
-// ─── Edit Transaction Sheet ───────────────────────────────────────────────────
-
 const BUCKETS: TransactionBucket[] = ['needs', 'wants', 'savings', 'uncategorized']
 
 function EditTransactionSheet({
-  transaction,
-  onClose
+  transaction, onClose
 }: {
   transaction: Transaction
   onClose: () => void
@@ -169,9 +174,9 @@ function EditTransactionSheet({
 
   return (
     <Sheet onClose={onClose} title={transaction.description} maxHeight="70vh">
-      <form onSubmit={submit} className="px-4 pb-4 flex flex-col gap-4">
+      <form onSubmit={submit} className="px-5 pb-5 flex flex-col gap-4">
         <div>
-          <p className="text-xs text-muted mb-2 uppercase tracking-wider">Category</p>
+          <p className="section-label mb-2.5">Category</p>
           <div className="grid grid-cols-2 gap-1.5">
             {BUCKETS.map(b => {
               const bm = BUCKET_META[b]
@@ -180,7 +185,7 @@ function EditTransactionSheet({
                   key={b}
                   type="button"
                   onClick={() => setBucket(b)}
-                  className={`card px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  className={`card px-3 py-3 text-left text-sm font-medium transition-colors hover:bg-elev/40 ${
                     bucket === b ? 'border-2' : ''
                   }`}
                   style={bucket === b ? { borderColor: bm.color, color: bm.color } : { color: bm.color }}
@@ -203,9 +208,9 @@ function EditTransactionSheet({
           />
         </div>
 
-        <div className="flex items-center justify-between text-xs text-muted -mt-2">
+        <div className="flex items-center justify-between text-xs text-muted -mt-1">
           <span>{format(parseISO(transaction.date), 'MMMM d, yyyy')}</span>
-          <span className="font-semibold tabular-nums">{formatMoney(transaction.amount_cents)}</span>
+          <span className="font-mono font-semibold tabular-nums">{formatMoney(transaction.amount_cents)}</span>
         </div>
 
         <button type="submit" disabled={update.isPending} className="btn-primary py-3">

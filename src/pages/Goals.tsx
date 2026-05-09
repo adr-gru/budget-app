@@ -6,6 +6,7 @@ import { useLatestBalances } from '../data/snapshots'
 import { useGoalContributions, useDeleteContribution } from '../data/contributions'
 import { ContributionSheet } from '../components/ContributionSheet'
 import { Sheet } from '../components/Sheet'
+import { Skeleton } from '../components/Skeleton'
 import { formatMoney, parseCents, formatDollars } from '../lib/money'
 import { todayISO } from '../lib/cycle'
 import type { Goal } from '../lib/supabase'
@@ -17,27 +18,22 @@ function paceLabel(
   targetDate: string | null
 ): { label: string; color: string } | null {
   if (!targetDate || targetCents <= 0) return null
-
-  const now = new Date()
-  const end = parseISO(targetDate)
+  const now   = new Date()
+  const end   = parseISO(targetDate)
   const start = parseISO(createdAt)
-  const totalDays = differenceInCalendarDays(end, start)
+  const totalDays   = differenceInCalendarDays(end, start)
   const elapsedDays = differenceInCalendarDays(now, start)
   if (totalDays <= 0 || elapsedDays <= 0) return null
-
   const expectedPct = Math.min(elapsedDays / totalDays, 1)
-  const actualPct = Math.min(currentCents / targetCents, 1)
+  const actualPct   = Math.min(currentCents / targetCents, 1)
   const diff = actualPct - expectedPct
-
-  if (diff >= 0.05) return { label: 'Ahead of pace', color: '#34c759' }
-  if (diff >= -0.05) return { label: 'On pace', color: '#8e8e93' }
-  return { label: 'Behind pace', color: '#ff9500' }
+  if (diff >= 0.05)  return { label: 'Ahead of pace', color: '#16A34A' }
+  if (diff >= -0.05) return { label: 'On pace',        color: '#6B7280' }
+  return { label: 'Behind pace', color: '#D97706' }
 }
 
 function ContributionLog({
-  goalId,
-  goalName,
-  isLinked
+  goalId, goalName, isLinked
 }: {
   goalId: string
   goalName: string
@@ -57,10 +53,7 @@ function ContributionLog({
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-medium text-subtle">Contribution history</p>
         {!isLinked && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="text-xs text-accent font-medium"
-          >
+          <button onClick={() => setShowAdd(true)} className="text-xs text-accent font-medium hover:text-accent/80 transition-colors">
             + Add
           </button>
         )}
@@ -75,7 +68,7 @@ function ContributionLog({
           {contributions.slice(0, 6).map(c => (
             <div key={c.id} className="flex items-center justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <span className="text-xs text-subtle">
+                <span className="text-xs text-subtle font-mono tabular-nums">
                   {format(parseISO(c.occurred_on), 'MMM d, yyyy')}
                 </span>
                 {c.note && (
@@ -86,12 +79,12 @@ function ContributionLog({
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
-                <span className="text-xs font-medium text-success tabular-nums">
+                <span className="font-mono text-xs font-semibold text-success tabular-nums">
                   +{formatMoney(c.amount_cents)}
                 </span>
                 <button
                   onClick={() => handleDelete(c.id)}
-                  className="text-muted/60 hover:text-danger transition-colors"
+                  className="text-muted/60 hover:text-danger transition-colors p-0.5"
                   aria-label="Remove contribution"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -119,10 +112,7 @@ function ContributionLog({
 }
 
 function GoalCard({
-  goal,
-  currentCents,
-  onEdit,
-  onDelete
+  goal, currentCents, onEdit, onDelete
 }: {
   goal: Goal
   currentCents: number
@@ -146,7 +136,6 @@ function GoalCard({
     : null
 
   const pace = paceLabel(currentCents, goal.target_cents, goal.created_at, goal.target_date)
-
   const lastContribution = contributions[0]
 
   return (
@@ -166,26 +155,26 @@ function GoalCard({
               </p>
             )}
             {pace && !over && (
-              <span className="text-[10px] font-medium" style={{ color: pace.color }}>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ color: pace.color, background: pace.color + '18' }}>
                 {pace.label}
               </span>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={onEdit} className="btn-ghost p-1.5">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button onClick={onEdit} className="btn-ghost p-2">
             <IconEdit />
           </button>
-          <button onClick={onDelete} className="btn-ghost p-1.5 text-danger hover:text-danger">
+          <button onClick={onDelete} className="btn-ghost p-2 text-danger hover:text-danger">
             <IconTrash />
           </button>
         </div>
       </div>
 
-      <div className="h-2 bg-border/50 rounded-full overflow-hidden mb-2">
+      <div className="h-2 bg-elev rounded-full overflow-hidden mb-2">
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: over ? '#34c759' : '#007aff' }}
+          style={{ width: `${pct}%`, background: over ? '#16A34A' : '#3B82F6' }}
         />
       </div>
 
@@ -193,32 +182,32 @@ function GoalCard({
         <span className="text-xs text-muted">
           {over ? '100% complete' : `${pct}% of ${formatMoney(goal.target_cents)}`}
         </span>
-        <span className="text-sm font-semibold tabular-nums" style={{ color: over ? '#34c759' : undefined }}>
+        <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: over ? '#16A34A' : undefined }}>
           {formatMoney(currentCents)}
-          {!over && <span className="text-xs font-normal text-muted"> / {formatMoney(goal.target_cents)}</span>}
+          {!over && <span className="font-mono text-xs font-normal text-muted"> / {formatMoney(goal.target_cents)}</span>}
         </span>
       </div>
 
       {!over && (
         <div className="flex items-center justify-between mt-1">
           {remaining > 0 && (
-            <p className="text-xs text-muted">{formatMoney(remaining)} to go</p>
+            <p className="font-mono text-xs text-muted tabular-nums">{formatMoney(remaining)} to go</p>
           )}
           {monthlyRequired !== null && (
-            <p className="text-xs text-muted">{formatMoney(monthlyRequired)}/mo needed</p>
+            <p className="font-mono text-xs text-muted tabular-nums">{formatMoney(monthlyRequired)}/mo needed</p>
           )}
         </div>
       )}
 
       {lastContribution && !expanded && (
         <p className="text-xs text-muted mt-1.5">
-          Last: +{formatMoney(lastContribution.amount_cents)} · {formatDistanceToNow(parseISO(lastContribution.occurred_on), { addSuffix: true })}
+          Last: <span className="font-mono tabular-nums">+{formatMoney(lastContribution.amount_cents)}</span> · {formatDistanceToNow(parseISO(lastContribution.occurred_on), { addSuffix: true })}
         </p>
       )}
 
       <button
         onClick={() => setExpanded(v => !v)}
-        className="mt-2 text-xs text-accent font-medium"
+        className="mt-2.5 text-xs text-accent font-medium hover:text-accent/80 transition-colors"
       >
         {expanded ? 'Hide history' : 'View history'}
       </button>
@@ -235,12 +224,12 @@ function GoalCard({
 }
 
 export function Goals() {
-  const { data: goals = [] } = useGoals()
-  const { data: accounts = [] } = useAccounts()
-  const { data: latestBalances = [] } = useLatestBalances()
+  const { data: goals = [], isLoading } = useGoals()
+  const { data: accounts = [] }         = useAccounts()
+  const { data: latestBalances = [] }   = useLatestBalances()
   const deleteGoal = useDeleteGoal()
 
-  const [showAdd, setShowAdd]     = useState(false)
+  const [showAdd,    setShowAdd]    = useState(false)
   const [editTarget, setEditTarget] = useState<Goal | null>(null)
 
   const balanceMap = new Map(latestBalances.map(s => [s.account_id, s.balance_cents]))
@@ -256,37 +245,44 @@ export function Goals() {
   }
 
   return (
-    <div className="pb-24">
-      <div className="px-4 pt-12 pb-4 border-b border-border flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-text">Goals</h1>
+    <div className="pb-24 lg:pb-8">
+      <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border flex items-center justify-between">
+        <h1 className="page-title">Goals</h1>
         <button onClick={() => setShowAdd(true)} className="btn text-sm gap-1.5">
           <span className="text-base leading-none">+</span> Add
         </button>
       </div>
 
-      {goals.length === 0 && (
-        <div className="px-4 pt-5">
-          <div className="card px-4 py-5 text-center">
-            <p className="text-sm text-subtle">No goals yet.</p>
-            <p className="text-xs text-muted mt-1">Set a savings target and track your progress over time.</p>
-            <button onClick={() => setShowAdd(true)} className="btn-primary mt-4 px-5 py-2 text-sm">
-              Add first goal
-            </button>
+      {isLoading ? (
+        <div className="px-4 lg:px-6 pt-5 flex flex-col gap-3">
+          {[0,1,2].map(i => <Skeleton key={i} className="h-32 rounded-lg" />)}
+        </div>
+      ) : goals.length === 0 ? (
+        <div className="px-4 lg:px-6 pt-12 flex flex-col items-center text-center">
+          <div className="w-14 h-14 rounded-full bg-elev flex items-center justify-center mb-4">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
+              <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+            </svg>
           </div>
+          <p className="text-base font-display font-semibold text-text mb-1">No goals yet</p>
+          <p className="text-sm text-muted mb-5 max-w-xs">Set a savings target and track your progress over time.</p>
+          <button onClick={() => setShowAdd(true)} className="btn-primary px-6 py-2.5">
+            Add first goal
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 lg:px-6 pt-5 flex flex-col gap-3">
+          {goals.map(goal => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              currentCents={currentCentsFor(goal)}
+              onEdit={() => setEditTarget(goal)}
+              onDelete={() => handleDelete(goal.id)}
+            />
+          ))}
         </div>
       )}
-
-      <div className="px-4 pt-4 flex flex-col gap-3">
-        {goals.map(goal => (
-          <GoalCard
-            key={goal.id}
-            goal={goal}
-            currentCents={currentCentsFor(goal)}
-            onEdit={() => setEditTarget(goal)}
-            onDelete={() => handleDelete(goal.id)}
-          />
-        ))}
-      </div>
 
       {showAdd && (
         <GoalSheet accounts={accounts} balanceMap={balanceMap} onClose={() => setShowAdd(false)} />
@@ -304,10 +300,7 @@ export function Goals() {
 }
 
 function GoalSheet({
-  existing,
-  accounts,
-  balanceMap,
-  onClose
+  existing, accounts, balanceMap, onClose
 }: {
   existing?: Goal
   accounts: ReturnType<typeof useAccounts>['data'] & object[]
@@ -320,11 +313,11 @@ function GoalSheet({
   const savingsAccounts = (accounts as { id: string; name: string; type: string }[])
     .filter(a => a.type === 'savings' || a.type === 'investment')
 
-  const [name,      setName]      = useState(existing?.name ?? '')
-  const [target,    setTarget]    = useState(existing ? formatDollars(existing.target_cents) : '')
+  const [name,       setName]       = useState(existing?.name ?? '')
+  const [target,     setTarget]     = useState(existing ? formatDollars(existing.target_cents) : '')
   const [targetDate, setTargetDate] = useState(existing?.target_date ?? '')
-  const [linkedId,  setLinkedId]  = useState(existing?.linked_account_id ?? '')
-  const [manual,    setManual]    = useState(existing && !existing.linked_account_id ? formatDollars(existing.current_cents) : '')
+  const [linkedId,   setLinkedId]   = useState(existing?.linked_account_id ?? '')
+  const [manual,     setManual]     = useState(existing && !existing.linked_account_id ? formatDollars(existing.current_cents) : '')
 
   const currentFromLinked = linkedId ? (balanceMap.get(linkedId) ?? 0) : null
 
@@ -349,7 +342,7 @@ function GoalSheet({
 
   return (
     <Sheet onClose={onClose} title={existing ? 'Edit goal' : 'New goal'} maxHeight="90vh">
-      <form onSubmit={submit} className="px-4 flex flex-col gap-4 pb-4">
+      <form onSubmit={submit} className="px-5 flex flex-col gap-4 pb-5">
         <div>
           <label className="text-xs text-muted block mb-1.5">Goal name</label>
           <input
@@ -368,15 +361,9 @@ function GoalSheet({
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
             <input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="1"
-              value={target}
-              onChange={e => setTarget(e.target.value)}
-              placeholder="0.00"
-              required
-              className="field pl-7"
+              type="number" inputMode="decimal" step="0.01" min="1"
+              value={target} onChange={e => setTarget(e.target.value)}
+              placeholder="0.00" required className="field pl-7 font-mono tabular-nums"
             />
           </div>
         </div>
@@ -396,18 +383,14 @@ function GoalSheet({
           <div>
             <label className="text-xs text-muted block mb-1.5">Link to account (optional)</label>
             <p className="text-xs text-muted mb-2">Automatically tracks the balance of one of your accounts as progress.</p>
-            <select
-              value={linkedId}
-              onChange={e => setLinkedId(e.target.value)}
-              className="field"
-            >
+            <select value={linkedId} onChange={e => setLinkedId(e.target.value)} className="field">
               <option value="">None — track manually</option>
               {savingsAccounts.map(a => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
             {linkedId && currentFromLinked !== null && (
-              <p className="text-xs text-muted mt-1.5">
+              <p className="font-mono text-xs text-muted mt-1.5 tabular-nums">
                 Current balance: {formatMoney(currentFromLinked)}
               </p>
             )}
@@ -420,14 +403,9 @@ function GoalSheet({
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
               <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={manual}
-                onChange={e => setManual(e.target.value)}
-                placeholder="0.00"
-                className="field pl-7"
+                type="number" inputMode="decimal" step="0.01" min="0"
+                value={manual} onChange={e => setManual(e.target.value)}
+                placeholder="0.00" className="field pl-7 font-mono tabular-nums"
               />
             </div>
           </div>

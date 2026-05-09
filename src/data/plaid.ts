@@ -17,16 +17,27 @@ export function usePlaidLinkTokenImperative() {
   }, [])
 }
 
+export function useLoadPlaidLink() {
+  return useCallback((): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (window.Plaid) { resolve(); return }
+      const existing = document.querySelector('script[src*="plaid.com/link"]')
+      if (existing) {
+        existing.addEventListener('load', () => resolve())
+        return
+      }
+      const s = document.createElement('script')
+      s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
+      s.onload  = () => resolve()
+      s.onerror = () => reject(new Error('Failed to load Plaid Link'))
+      document.head.appendChild(s)
+    })
+  }, [])
+}
+
 interface ExchangeInput {
-  public_token: string
+  public_token:     string
   institution_name: string | null
-  plaid_accounts: Array<{
-    id: string
-    name: string
-    type: string
-    subtype: string | null
-    mask: string | null
-  }>
 }
 
 interface ExchangeResult {

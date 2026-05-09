@@ -7,10 +7,10 @@ export interface AccountTypeMeta {
 }
 
 export const ACCOUNT_TYPE_META: Record<AccountType, AccountTypeMeta> = {
-  credit_card: { label: 'Credit Cards', color: '#ef4444', isDebt: true  },
-  checking:    { label: 'Checking',     color: '#3b82f6', isDebt: false },
-  savings:     { label: 'Savings',      color: '#22c55e', isDebt: false },
-  investment:  { label: 'Investments',  color: '#a855f7', isDebt: false }
+  credit_card: { label: 'Credit Cards', color: '#DC2626', isDebt: true  },
+  checking:    { label: 'Checking',     color: '#3B82F6', isDebt: false },
+  savings:     { label: 'Savings',      color: '#16A34A', isDebt: false },
+  investment:  { label: 'Investments',  color: '#8B5CF6', isDebt: false }
 }
 
 export const ACCOUNT_TYPES: AccountType[] = ['credit_card', 'checking', 'savings', 'investment']

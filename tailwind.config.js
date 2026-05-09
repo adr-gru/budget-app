@@ -3,35 +3,42 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      screens: {
+        xs: '390px'
+      },
       fontFamily: {
-        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Helvetica Neue', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
+        sans:    ['Roboto', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Poppins', 'ui-sans-serif', 'sans-serif'],
+        mono:    ['Inconsolata', 'ui-monospace', 'monospace']
       },
       colors: {
-        bg:      '#f5f5f7',
-        surface: '#ffffff',
-        elev:    '#fafafc',
-        border:  '#e5e5ea',
-        muted:   '#8e8e93',
-        subtle:  '#6c6c70',
-        text:    '#0a0a0c',
-        accent:  '#007aff',
-        danger:  '#ff3b30',
-        success: '#34c759',
-        warning: '#ff9500'
+        bg:        '#F9FAFB',
+        surface:   '#FFFFFF',
+        elev:      '#F3F4F6',
+        border:    '#E5E7EB',
+        muted:     '#6B7280',
+        subtle:    '#374151',
+        text:      '#111827',
+        accent:    '#3B82F6',
+        primary:   '#3B82F6',
+        secondary: '#8B5CF6',
+        danger:    '#DC2626',
+        success:   '#16A34A',
+        warning:   '#D97706'
       },
       borderRadius: {
-        DEFAULT: '10px',
-        sm:  '8px',
-        md:  '10px',
-        lg:  '14px',
-        xl:  '18px',
+        DEFAULT: '8px',
+        sm:  '4px',
+        md:  '8px',
+        lg:  '12px',
+        xl:  '16px',
         '2xl': '24px'
       },
       boxShadow: {
-        card:   '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
-        raised: '0 4px 16px rgba(0,0,0,0.10)',
-        sheet:  '0 -8px 32px rgba(0,0,0,0.10)'
+        card:   '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        raised: '0 4px 12px rgba(0,0,0,0.08)',
+        sheet:  '0 -4px 24px rgba(0,0,0,0.08)',
+        modal:  '0 20px 60px rgba(0,0,0,0.15)'
       }
     }
   },

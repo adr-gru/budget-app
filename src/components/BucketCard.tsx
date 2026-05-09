@@ -17,35 +17,39 @@ export function BucketCard({ bucket, pct, targetCents, actualCents }: Props) {
 
   return (
     <div className="card px-4 py-3.5">
-      <div className="flex items-baseline justify-between mb-2">
+      <div className="flex items-baseline justify-between mb-2.5">
         <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ background: meta.color }}
+          />
           <span className="text-sm font-medium text-text">{meta.label}</span>
           <span className="text-xs text-muted">{pct}%</span>
         </div>
         <div className="text-right">
-          <span className="text-sm tabular-nums font-semibold text-text">
+          <span className="font-mono text-sm tabular-nums font-semibold text-text">
             {formatMoney(actualCents)}
           </span>
-          <span className="text-xs text-muted tabular-nums">
+          <span className="font-mono text-xs text-muted tabular-nums">
             {' '}/{' '}{formatMoney(targetCents)}
           </span>
         </div>
       </div>
-      <div className="h-1.5 bg-border/50 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-elev rounded-full overflow-hidden">
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full rounded-full transition-all duration-500"
           style={{
             width: `${ratio * 100}%`,
-            background: over ? '#ff3b30' : meta.color
+            background: over ? '#DC2626' : meta.color
           }}
         />
       </div>
       {over ? (
-        <p className="text-xs text-danger mt-1.5">
+        <p className="text-xs text-danger mt-1.5 font-mono tabular-nums">
           {formatMoney(actualCents - targetCents)} over budget
         </p>
       ) : targetCents > 0 ? (
-        <p className="text-xs text-muted mt-1.5">
+        <p className="text-xs text-muted mt-1.5 font-mono tabular-nums">
           {formatMoney(remaining)} remaining
         </p>
       ) : null}

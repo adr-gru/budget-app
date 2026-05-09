@@ -36,18 +36,19 @@ interface Props {
 }
 
 export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap, onEdit }: Props) {
-  const gradient      = CARD_GRADIENTS[account.type as keyof typeof CARD_GRADIENTS]
-  const utilization   = account.type === 'credit_card' && account.credit_limit_cents && balance !== null
+  const gradient    = CARD_GRADIENTS[account.type as keyof typeof CARD_GRADIENTS]
+  const utilization = account.type === 'credit_card' && account.credit_limit_cents && balance !== null
     ? Math.round((balance / account.credit_limit_cents) * 100)
     : null
-  const dueDays       = account.type === 'credit_card' && account.due_day != null
+  const dueDays     = account.type === 'credit_card' && account.due_day != null
     ? daysUntilDue(account.due_day)
     : null
-  const dueSoon        = dueDays !== null && dueDays <= 5
-  const updatedLabel   = lastUpdatedLabel(lastSnapshotAt)
-  const hasActivity    = delta !== null && delta !== 0
-  const isDebt         = account.type === 'credit_card'
-  const isTellerLinked = Boolean(account.teller_enrollment_id)
+  const dueSoon      = dueDays !== null && dueDays <= 5
+  const updatedLabel = lastUpdatedLabel(lastSnapshotAt)
+  const hasActivity  = delta !== null && delta !== 0
+  const isDebt       = account.type === 'credit_card'
+  const isLinked     = Boolean(account.plaid_item_id || account.teller_enrollment_id)
+  const lastSyncedAt = account.plaid_last_synced_at ?? account.teller_last_synced_at
 
   return (
     <div className="relative">
@@ -59,28 +60,28 @@ export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap, on
         className="wallet-card w-full text-left cursor-pointer"
         style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
       >
-        <div className="relative p-5 flex flex-col" style={{ minHeight: '160px' }}>
+        <div className="relative p-5 flex flex-col" style={{ minHeight: '148px' }}>
           {/* Top row */}
           <div className="flex items-start justify-between mb-auto">
-            <p className="text-sm font-semibold text-white truncate mr-2 leading-snug">{account.name}</p>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/70 mt-0.5">
+            <div>
+              <p className="text-sm font-semibold text-white truncate mr-2 leading-snug">{account.name}</p>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-white/60">
                 {TYPE_LABEL[account.type]}
               </span>
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); onEdit() }}
-                  aria-label="Edit account"
-                  className="p-1 -mr-1 text-white/60 hover:text-white transition-colors rounded"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
-                </button>
-              )}
             </div>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onEdit() }}
+                aria-label="Edit account"
+                className="p-1.5 -mr-1.5 -mt-0.5 text-white/50 hover:text-white transition-colors rounded-lg"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* Balance */}
@@ -88,7 +89,7 @@ export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap, on
             <p className="text-[11px] text-white/60 mb-0.5">
               {account.type === 'credit_card' ? 'Balance owed' : 'Current balance'}
             </p>
-            <p className="text-3xl font-bold tabular-nums text-white leading-none">
+            <p className="font-mono text-3xl font-bold tabular-nums text-white leading-none">
               {balance !== null ? formatMoney(balance) : '—'}
             </p>
           </div>
@@ -106,26 +107,26 @@ export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap, on
                       {utilization}% used
                     </span>
                   </div>
-                  <div className="h-1 bg-white/25 rounded-full overflow-hidden">
+                  <div className="h-1 bg-white/20 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
                       style={{
                         width: `${Math.min(utilization, 100)}%`,
-                        background: utilization >= 80 ? 'rgba(255,150,150,0.9)' : 'rgba(255,255,255,0.75)'
+                        background: utilization >= 80 ? 'rgba(255,150,150,0.9)' : 'rgba(255,255,255,0.7)'
                       }}
                     />
                   </div>
                 </div>
-              ) : isTellerLinked && account.teller_last_synced_at ? (
+              ) : isLinked && lastSyncedAt ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-white/70 bg-white/15 rounded-full px-2 py-0.5">
-                  <svg width="7" height="7" viewBox="0 0 10 10" fill="currentColor">
+                  <svg width="6" height="6" viewBox="0 0 10 10" fill="currentColor">
                     <circle cx="5" cy="5" r="5"/>
                   </svg>
-                  Synced {formatDistanceToNowStrict(parseISO(account.teller_last_synced_at), { addSuffix: true })}
+                  Synced {formatDistanceToNowStrict(parseISO(lastSyncedAt), { addSuffix: true })}
                 </span>
-              ) : isTellerLinked ? (
+              ) : isLinked ? (
                 <span className="inline-flex items-center gap-1 text-[10px] text-white/50 bg-white/10 rounded-full px-2 py-0.5">
-                  Teller linked
+                  Bank linked
                 </span>
               ) : updatedLabel ? (
                 <p className="text-[11px] text-white/60">Updated {updatedLabel}</p>
@@ -139,7 +140,7 @@ export function AccountCard({ account, balance, delta, lastSnapshotAt, onTap, on
                 </p>
               )}
               {hasActivity && (
-                <p className={`text-xs tabular-nums font-medium mt-0.5 ${
+                <p className={`text-xs font-mono tabular-nums font-medium mt-0.5 ${
                   isDebt
                     ? delta! > 0 ? 'text-red-200' : 'text-green-200'
                     : delta! > 0 ? 'text-green-200' : 'text-red-200'

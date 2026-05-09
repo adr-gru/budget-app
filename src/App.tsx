@@ -14,7 +14,7 @@ import { History } from './pages/History'
 import { Goals } from './pages/Goals'
 import { Transactions } from './pages/Transactions'
 import { Onboarding } from './pages/Onboarding'
-import { BottomNav } from './components/BottomNav'
+import { AppLayout } from './components/AppLayout'
 
 import { queryClient } from './lib/queryClient'
 import { isSupabaseConfigured } from './lib/supabase'
@@ -61,7 +61,7 @@ function AuthenticatedApp() {
   }
 
   return (
-    <>
+    <AppLayout>
       <Routes>
         <Route path="/"              element={<Dashboard />} />
         <Route path="/accounts"      element={<Accounts />} />
@@ -73,8 +73,7 @@ function AuthenticatedApp() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="*"              element={<Navigate to="/" replace />} />
       </Routes>
-      <BottomNav />
-    </>
+    </AppLayout>
   )
 }
 

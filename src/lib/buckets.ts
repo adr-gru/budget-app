@@ -6,9 +6,9 @@ export interface BucketMeta {
 }
 
 export const BUCKET_META: Record<Bucket, BucketMeta> = {
-  needs:   { label: 'Needs',   color: '#60a5fa' },
-  wants:   { label: 'Wants',   color: '#e879f9' },
-  savings: { label: 'Savings', color: '#34d399' }
+  needs:   { label: 'Needs',   color: '#3B82F6' },
+  wants:   { label: 'Wants',   color: '#8B5CF6' },
+  savings: { label: 'Savings', color: '#16A34A' }
 }
 
 export const BUCKETS: Bucket[] = ['needs', 'wants', 'savings']
