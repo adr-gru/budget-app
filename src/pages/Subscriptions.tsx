@@ -7,7 +7,6 @@ import {
 import { SubscriptionRow } from '../components/SubscriptionRow'
 import { BUCKETS, BUCKET_META } from '../lib/buckets'
 import { formatMoney, parseCents, formatDollars } from '../lib/money'
-import { todayISO } from '../lib/cycle'
 import type { Bucket, SubCadence, Subscription } from '../lib/supabase'
 import type { SuggestedSubscription } from '../data/subscriptions'
 
