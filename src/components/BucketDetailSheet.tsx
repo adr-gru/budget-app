@@ -25,6 +25,7 @@ export function BucketDetailSheet({ bucket, cycleStart, cycleEnd, subscriptions,
         .from('transactions')
         .select('*')
         .eq('bucket', bucket)
+        .eq('is_income', false)
         .gte('date', cycleStartStr)
         .lte('date', cycleEndStr)
         .order('amount_cents', { ascending: false })

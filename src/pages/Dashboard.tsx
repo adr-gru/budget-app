@@ -351,7 +351,7 @@ export function Dashboard() {
         const cycleStartStr = format(cycleStart, 'yyyy-MM-dd')
         const cycleEndStr   = format(cycleEnd_, 'yyyy-MM-dd')
         const topTx = allTransactions
-          .filter(tx => tx.amount_cents > 0 && tx.date >= cycleStartStr && tx.date <= cycleEndStr)
+          .filter(tx => !tx.is_income && tx.amount_cents > 0 && tx.date >= cycleStartStr && tx.date <= cycleEndStr)
           .sort((a, b) => b.amount_cents - a.amount_cents)
           .slice(0, 3)
         if (topTx.length === 0) return null
