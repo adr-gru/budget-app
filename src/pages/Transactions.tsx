@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react'
-import { format, parseISO, isToday, isYesterday } from 'date-fns'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { format, parseISO, isToday, isYesterday, differenceInHours } from 'date-fns'
 import { useTransactions, useUpdateTransaction } from '../data/transactions'
-import { usePlaidImportTransactions } from '../data/plaid'
+import { usePlaidImportTransactions, usePlaidSync } from '../data/plaid'
 import { useAccounts } from '../data/accounts'
+import { useTransactionRules, useAddRule, applyRulesToTransactions } from '../data/transactionRules'
 import { Sheet } from '../components/Sheet'
 import { Skeleton } from '../components/Skeleton'
 import { formatMoney } from '../lib/money'
@@ -51,11 +52,22 @@ const BUCKET_FILTERS: Array<{ value: TransactionBucket | 'all'; label: string }>
   { value: 'uncategorized', label: 'Uncategorized' },
 ]
 
+interface PendingRule {
+  merchantName: string
+  bucket: 'needs' | 'wants' | 'savings'
+}
+
 export function Transactions() {
   const { data: transactions = [], isLoading } = useTransactions()
-  const { data: accounts = [] } = useAccounts()
-  const importTx = usePlaidImportTransactions()
-  const [editing, setEditing] = useState<Transaction | null>(null)
+  const { data: accounts = [] }                = useAccounts()
+  const { data: rules = [] }                   = useTransactionRules()
+  const importTx   = usePlaidImportTransactions()
+  const plaidSync  = usePlaidSync()
+  const addRule    = useAddRule()
+
+  const [editing,     setEditing]     = useState<Transaction | null>(null)
+  const [pendingRule, setPendingRule] = useState<PendingRule | null>(null)
+  const [isSyncing,   setIsSyncing]   = useState(false)
 
   const [search,       setSearch]       = useState('')
   const [bucketFilter, setBucketFilter] = useState<TransactionBucket | 'all'>('all')
@@ -64,6 +76,40 @@ export function Transactions() {
 
   const accountMap = new Map(accounts.map(a => [a.id, a.name]))
   const hasLinked  = accounts.some(a => a.plaid_item_id)
+
+  const syncFiredRef = useRef(false)
+
+  useEffect(() => {
+    if (syncFiredRef.current) return
+    if (accounts.length === 0) return
+    if (!hasLinked) return
+
+    syncFiredRef.current = true
+
+    const linkedAccounts = accounts.filter(a => a.plaid_item_id)
+    const syncDates = linkedAccounts
+      .map(a => a.plaid_last_synced_at)
+      .filter((d): d is string => d !== null)
+
+    const isStale = syncDates.length === 0 || (() => {
+      const mostRecent = syncDates.reduce((a, b) => (a > b ? a : b))
+      return differenceInHours(new Date(), parseISO(mostRecent)) > 4
+    })()
+
+    if (!isStale) return
+
+    setIsSyncing(true)
+    Promise.all([
+      importTx.mutateAsync(),
+      plaidSync.mutateAsync(),
+    ]).finally(() => setIsSyncing(false))
+  }, [accounts, hasLinked])
+
+  useEffect(() => {
+    if (!pendingRule) return
+    const timer = setTimeout(() => setPendingRule(null), 8000)
+    return () => clearTimeout(timer)
+  }, [pendingRule])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -89,10 +135,26 @@ export function Transactions() {
 
   const currentSortLabel = SORT_OPTIONS.find(o => o.value === sortMode)?.label ?? 'Sort'
 
+  function handleBucketChange(tx: Transaction, bucket: TransactionBucket) {
+    if (bucket === 'uncategorized') return
+    const merchantName = tx.merchant_name ?? tx.description
+    setPendingRule({ merchantName, bucket: bucket as 'needs' | 'wants' | 'savings' })
+  }
+
+  async function applyRule() {
+    if (!pendingRule) return
+    await addRule.mutateAsync({ merchant_pattern: pendingRule.merchantName, bucket: pendingRule.bucket })
+    setPendingRule(null)
+    await applyRulesToTransactions([...rules, { id: '', user_id: '', created_at: '', merchant_pattern: pendingRule.merchantName, bucket: pendingRule.bucket }])
+  }
+
   return (
     <div className="pb-24 lg:pb-8">
       <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border flex items-center justify-between">
-        <h1 className="page-title">Transactions</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="page-title">Transactions</h1>
+          {isSyncing && <span className="text-xs text-muted">Syncing…</span>}
+        </div>
         {hasLinked && (
           <button
             onClick={() => importTx.mutate()}
@@ -221,6 +283,24 @@ export function Transactions() {
               </p>
             </div>
           )}
+
+          {pendingRule && (
+            <div className="mx-4 lg:mx-6 mt-4 card px-4 py-3 mb-2 flex items-center gap-3">
+              <p className="text-xs text-text flex-1 min-w-0">
+                Always categorize <span className="font-semibold">"{pendingRule.merchantName}"</span> as{' '}
+                <span className="font-semibold">{BUCKET_META[pendingRule.bucket].label}</span>?
+              </p>
+              <button onClick={applyRule} className="btn-ghost text-xs flex-shrink-0">
+                Apply rule
+              </button>
+              <button onClick={() => setPendingRule(null)} className="text-muted hover:text-text transition-colors flex-shrink-0" aria-label="Dismiss">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          )}
+
           {grouped.map(({ date, items }) => (
             <div key={date || 'flat'} className="px-4 lg:px-6 pt-5">
               {date && <p className="section-label mb-2.5">{dateLabel(date)}</p>}
@@ -272,6 +352,7 @@ export function Transactions() {
         <EditTransactionSheet
           transaction={editing}
           onClose={() => setEditing(null)}
+          onBucketChanged={handleBucketChange}
         />
       )}
     </div>
@@ -281,10 +362,11 @@ export function Transactions() {
 const BUCKETS: TransactionBucket[] = ['needs', 'wants', 'savings', 'uncategorized']
 
 function EditTransactionSheet({
-  transaction, onClose
+  transaction, onClose, onBucketChanged
 }: {
   transaction: Transaction
   onClose: () => void
+  onBucketChanged: (tx: Transaction, bucket: TransactionBucket) => void
 }) {
   const [bucket, setBucket] = useState<TransactionBucket>(transaction.bucket)
   const [tag,    setTag]    = useState(transaction.tag ?? '')
@@ -293,6 +375,9 @@ function EditTransactionSheet({
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     await update.mutateAsync({ id: transaction.id, bucket, tag: tag.trim() || null })
+    if (bucket !== 'uncategorized' && bucket !== transaction.bucket) {
+      onBucketChanged(transaction, bucket)
+    }
     onClose()
   }
 

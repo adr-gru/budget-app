@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import { isNative } from './lib/native'
+import { getTheme, applyTheme } from './lib/theme'
+
+applyTheme(getTheme())
 
 async function initNative() {
   if (!isNative) return

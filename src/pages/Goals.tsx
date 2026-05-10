@@ -139,16 +139,21 @@ function GoalCard({
   const lastContribution = contributions[0]
 
   return (
-    <div className="card px-4 py-4">
+    <div className="card px-4 py-4 relative">
+      {over && (
+        <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-success flex items-center justify-center">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 12 10 16 18 8"/>
+          </svg>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-text">{goal.name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {goal.target_date && (
+            {goal.target_date && !over && (
               <p className="text-xs text-muted">
-                {over
-                  ? 'Goal reached!'
-                  : monthsLeft !== null && monthsLeft >= 0
+                {monthsLeft !== null && monthsLeft >= 0
                   ? `${monthsLeft} month${monthsLeft !== 1 ? 's' : ''} · ${format(parseISO(goal.target_date), 'MMM yyyy')}`
                   : `Target: ${format(parseISO(goal.target_date), 'MMM yyyy')}`
                 }
@@ -159,9 +164,12 @@ function GoalCard({
                 {pace.label}
               </span>
             )}
+            {over && (
+              <span className="text-xs font-medium text-success">Goal reached!</span>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className={`flex items-center gap-1 flex-shrink-0 ${over ? 'mr-7' : ''}`}>
           <button onClick={onEdit} className="btn-ghost p-2">
             <IconEdit />
           </button>
@@ -174,7 +182,7 @@ function GoalCard({
       <div className="h-2 bg-elev rounded-full overflow-hidden mb-2">
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: over ? '#16A34A' : '#3B82F6' }}
+          style={{ width: over ? '100%' : `${pct}%`, background: over ? '#16A34A' : '#3B82F6' }}
         />
       </div>
 
@@ -272,15 +280,25 @@ export function Goals() {
         </div>
       ) : (
         <div className="px-4 lg:px-6 pt-5 flex flex-col gap-3">
-          {goals.map(goal => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              currentCents={currentCentsFor(goal)}
-              onEdit={() => setEditTarget(goal)}
-              onDelete={() => handleDelete(goal.id)}
-            />
-          ))}
+          {[...goals]
+            .sort((a, b) => {
+              const aComplete = currentCentsFor(a) >= a.target_cents
+              const bComplete = currentCentsFor(b) >= b.target_cents
+              return (aComplete ? 1 : 0) - (bComplete ? 1 : 0)
+            })
+            .map(goal => {
+              const isComplete = currentCentsFor(goal) >= goal.target_cents
+              return (
+                <div key={goal.id} className={isComplete ? 'opacity-75' : undefined}>
+                  <GoalCard
+                    goal={goal}
+                    currentCents={currentCentsFor(goal)}
+                    onEdit={() => setEditTarget(goal)}
+                    onDelete={() => handleDelete(goal.id)}
+                  />
+                </div>
+              )
+            })}
         </div>
       )}
 
@@ -321,6 +339,11 @@ function GoalSheet({
 
   const currentFromLinked = linkedId ? (balanceMap.get(linkedId) ?? 0) : null
 
+  const existingCurrentCents = existing
+    ? (existing.linked_account_id ? (balanceMap.get(existing.linked_account_id) ?? 0) : existing.current_cents)
+    : 0
+  const isComplete = existing ? existingCurrentCents >= existing.target_cents : false
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     const data = {
@@ -343,6 +366,16 @@ function GoalSheet({
   return (
     <Sheet onClose={onClose} title={existing ? 'Edit goal' : 'New goal'} maxHeight="90vh">
       <form onSubmit={submit} className="px-5 flex flex-col gap-4 pb-5">
+        {isComplete && (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-success/10">
+            <div className="w-5 h-5 rounded-full bg-success flex items-center justify-center flex-shrink-0">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 12 10 16 18 8"/>
+              </svg>
+            </div>
+            <p className="text-xs font-medium text-success">Goal reached! {formatMoney(existingCurrentCents)} saved.</p>
+          </div>
+        )}
         <div>
           <label className="text-xs text-muted block mb-1.5">Goal name</label>
           <input

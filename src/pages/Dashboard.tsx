@@ -7,8 +7,9 @@ import { useAccounts } from '../data/accounts'
 import { useLatestBalances, useCycleActivitySnapshots, computeActivity } from '../data/snapshots'
 import { useSubscriptions, subsThisCycle } from '../data/subscriptions'
 import { useGoals } from '../data/goals'
-import { useCycleTransactionBuckets } from '../data/transactions'
+import { useCycleTransactionBuckets, useTransactions } from '../data/transactions'
 import { BucketCard } from '../components/BucketCard'
+import { BucketDetailSheet } from '../components/BucketDetailSheet'
 import { Skeleton } from '../components/Skeleton'
 import { Sheet } from '../components/Sheet'
 import { currentCycleStart, cycleLabel, cycleEnd, todayISO } from '../lib/cycle'
@@ -122,7 +123,10 @@ export function Dashboard() {
     format(cycleEnd_, 'yyyy-MM-dd')
   )
 
+  const { data: allTransactions = [] } = useTransactions()
+
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
+  const [detailBucket, setDetailBucket] = useState<Bucket | null>(null)
 
   const balanceMap  = new Map(latestBalances.map(s => [s.account_id, s.balance_cents]))
   const activityMap = computeActivity(activitySnapshots, cycleStart)
@@ -330,6 +334,7 @@ export function Dashboard() {
                 pct={bucketPct(profile, b)}
                 targetCents={bucketTargetCents(profile, b)}
                 actualCents={bucketActuals[b]}
+                onClick={() => setDetailBucket(b)}
               />
             ))}
           </div>
@@ -340,6 +345,35 @@ export function Dashboard() {
           </p>
         </div>
       )}
+
+      {/* Top spending this cycle */}
+      {(() => {
+        const cycleStartStr = format(cycleStart, 'yyyy-MM-dd')
+        const cycleEndStr   = format(cycleEnd_, 'yyyy-MM-dd')
+        const topTx = allTransactions
+          .filter(tx => tx.amount_cents > 0 && tx.date >= cycleStartStr && tx.date <= cycleEndStr)
+          .sort((a, b) => b.amount_cents - a.amount_cents)
+          .slice(0, 3)
+        if (topTx.length === 0) return null
+        return (
+          <div className="px-4 lg:px-6 pt-6">
+            <p className="section-label mb-3">Top spending this cycle</p>
+            <div className="card px-4 py-0">
+              {topTx.map(tx => (
+                <div key={tx.id} className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text truncate">{tx.merchant_name || tx.description}</p>
+                    <p className="text-xs text-muted mt-0.5">{format(new Date(tx.date + 'T00:00:00'), 'MMM d')}</p>
+                  </div>
+                  <span className="font-mono text-sm tabular-nums text-danger font-medium flex-shrink-0">
+                    {formatMoney(tx.amount_cents)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Subscriptions due this cycle */}
       {dueSubs.length > 0 && (
@@ -456,6 +490,16 @@ export function Dashboard() {
             </svg>
           </button>
         </div>
+      )}
+
+      {detailBucket && (
+        <BucketDetailSheet
+          bucket={detailBucket}
+          cycleStart={cycleStart}
+          cycleEnd={cycleEnd_}
+          subscriptions={subs}
+          onClose={() => setDetailBucket(null)}
+        />
       )}
 
       {showWidgetPicker && (

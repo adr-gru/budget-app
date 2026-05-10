@@ -7,12 +7,13 @@ import { useLatestBalances } from '../data/snapshots'
 import { usePasskeyCredentials, useDeletePasskey } from '../data/passkeys'
 import { parseCents, formatDollars, formatMoney } from '../lib/money'
 import { useAuth } from '../auth/AuthProvider'
-import { todayISO } from '../lib/cycle'
+import { todayISO, currentCycleStart, cycleEnd, cycleLabel } from '../lib/cycle'
 import { exportAccounts, exportSubscriptions, exportGoals, exportSnapshots, exportContributions } from '../lib/export'
 import { isNative } from '../lib/native'
 import { usePasskey, passkeySupported } from '../hooks/usePasskey'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, addDays } from 'date-fns'
 import type { GoalContribution } from '../lib/supabase'
+import { getTheme, setTheme, type Theme } from '../lib/theme'
 
 function NumberField({
   label, hint, value, onSave, prefix, suffix,
@@ -120,6 +121,13 @@ function NativeSettings() {
       const { Preferences } = await import('@capacitor/preferences')
       const { value } = await Preferences.get({ key: 'biometric_enabled' })
       setBiometricEnabled(value === 'true')
+
+      const { supabase } = await import('../lib/supabase')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase.from('device_tokens').select('id').eq('user_id', user.id).limit(1)
+        setPushEnabled((data ?? []).length > 0)
+      }
     }
     load()
   }, [])
@@ -159,12 +167,15 @@ function NativeSettings() {
           </div>
           <Toggle checked={biometricEnabled} onChange={toggleBiometric} />
         </div>
-        <div className="flex items-center justify-between py-3.5">
+        <div className="flex items-center justify-between py-3.5 border-b border-border">
           <div>
             <p className="text-sm text-text">Push notifications</p>
             <p className="text-xs text-muted mt-0.5">Subscription renewals &amp; card due dates</p>
           </div>
           <Toggle checked={pushEnabled} onChange={togglePush} />
+        </div>
+        <div className="py-3.5">
+          <p className="text-xs text-muted">Passkeys are managed in the web version of the app.</p>
         </div>
       </div>
     </div>
@@ -245,6 +256,8 @@ export function Settings() {
   const { data: snapshots = [] } = useLatestBalances()
   const upsert = useUpsertProfile()
   const [saved, setSaved] = useState<string | null>(null)
+  const [bucketError, setBucketError] = useState<string | null>(null)
+  const [theme, setThemeState] = useState<Theme>(getTheme)
 
   const paycheck   = profile ? formatDollars(profile.paycheck_cents) : '0.00'
   const needsPct   = String(profile?.needs_pct   ?? 50)
@@ -253,11 +266,30 @@ export function Settings() {
   const anchor     = profile?.cycle_anchor_date ?? todayISO()
   const totalPct   = (profile?.needs_pct ?? 50) + (profile?.wants_pct ?? 30) + (profile?.savings_pct ?? 20)
 
+  const [anchorInput, setAnchorInput] = useState(anchor)
+  useEffect(() => { setAnchorInput(anchor) }, [anchor])
+
+  const cycleStart   = currentCycleStart(anchorInput)
+  const cycleEndDate = cycleEnd(cycleStart)
+  const nextStart    = addDays(cycleEndDate, 1)
+  const cyclePreview = `Current cycle: ${cycleLabel(cycleStart)}  ·  Next: ${cycleLabel(nextStart)}`
+
   async function save(updates: Parameters<typeof upsert.mutateAsync>[0], key: string) {
     await upsert.mutateAsync(updates)
     setSaved(key)
     setTimeout(() => setSaved(null), 1500)
   }
+
+  function handleTheme(t: Theme) {
+    setTheme(t)
+    setThemeState(t)
+  }
+
+  const themeOptions: { value: Theme; label: string }[] = [
+    { value: 'system', label: 'System' },
+    { value: 'light',  label: 'Light' },
+    { value: 'dark',   label: 'Dark' },
+  ]
 
   return (
     <div className="pb-24 lg:pb-8">
@@ -295,10 +327,47 @@ export function Settings() {
           </div>
         </div>
         <div className="card px-4 py-0">
-          <NumberField label="Needs"   hint="Housing, food, essentials"          value={needsPct}   suffix="%" step="1" min="0" max="100" placeholder="50" onSave={raw => save({ needs_pct:   Math.round(Number(raw) || 0) }, 'buckets')} />
-          <NumberField label="Wants"   hint="Entertainment, subscriptions"        value={wantsPct}   suffix="%" step="1" min="0" max="100" placeholder="30" onSave={raw => save({ wants_pct:   Math.round(Number(raw) || 0) }, 'buckets')} />
-          <NumberField label="Savings" hint="Savings &amp; investments"           value={savingsPct} suffix="%" step="1" min="0" max="100" placeholder="20" onSave={raw => save({ savings_pct: Math.round(Number(raw) || 0) }, 'buckets')} />
+          <NumberField
+            label="Needs"
+            hint="Housing, food, essentials"
+            value={needsPct}
+            suffix="%" step="1" min="0" max="100" placeholder="50"
+            onSave={raw => {
+              const newVal = Math.round(Number(raw) || 0)
+              const prospective = newVal + (profile?.wants_pct ?? 30) + (profile?.savings_pct ?? 20)
+              if (prospective > 100) { setBucketError(`Total would be ${prospective}% — must be 100% or less`); return }
+              setBucketError(null)
+              save({ needs_pct: newVal }, 'buckets')
+            }}
+          />
+          <NumberField
+            label="Wants"
+            hint="Entertainment, subscriptions"
+            value={wantsPct}
+            suffix="%" step="1" min="0" max="100" placeholder="30"
+            onSave={raw => {
+              const newVal = Math.round(Number(raw) || 0)
+              const prospective = (profile?.needs_pct ?? 50) + newVal + (profile?.savings_pct ?? 20)
+              if (prospective > 100) { setBucketError(`Total would be ${prospective}% — must be 100% or less`); return }
+              setBucketError(null)
+              save({ wants_pct: newVal }, 'buckets')
+            }}
+          />
+          <NumberField
+            label="Savings"
+            hint="Savings &amp; investments"
+            value={savingsPct}
+            suffix="%" step="1" min="0" max="100" placeholder="20"
+            onSave={raw => {
+              const newVal = Math.round(Number(raw) || 0)
+              const prospective = (profile?.needs_pct ?? 50) + (profile?.wants_pct ?? 30) + newVal
+              if (prospective > 100) { setBucketError(`Total would be ${prospective}% — must be 100% or less`); return }
+              setBucketError(null)
+              save({ savings_pct: newVal }, 'buckets')
+            }}
+          />
         </div>
+        {bucketError && <p className="text-xs text-danger mt-2 px-1">{bucketError}</p>}
       </div>
 
       {/* Pay cycle */}
@@ -307,17 +376,25 @@ export function Settings() {
           <p className="section-label">Pay cycle</p>
           {saved === 'anchor' && <span className="text-xs text-success font-medium">Saved</span>}
         </div>
-        <div className="card px-4 py-3.5 flex items-center justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-text">Cycle start date</p>
-            <p className="text-xs text-muted mt-0.5">The date your last pay period began</p>
+        <div className="card px-4 py-3.5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-text">Cycle start date</p>
+              <p className="text-xs text-muted mt-0.5">The date your last pay period began</p>
+            </div>
+            <input
+              type="date"
+              defaultValue={anchor}
+              onChange={e => {
+                if (e.target.value) {
+                  setAnchorInput(e.target.value)
+                  save({ cycle_anchor_date: e.target.value }, 'anchor')
+                }
+              }}
+              className="field w-auto text-sm flex-shrink-0"
+            />
           </div>
-          <input
-            type="date"
-            defaultValue={anchor}
-            onChange={e => { if (e.target.value) save({ cycle_anchor_date: e.target.value }, 'anchor') }}
-            className="field w-auto text-sm flex-shrink-0"
-          />
+          <p className="text-xs text-muted mt-2">{cyclePreview}</p>
         </div>
       </div>
 
@@ -327,6 +404,31 @@ export function Settings() {
       {/* Web passkeys */}
       {!isNative && passkeySupported && <WebSettings />}
 
+      {/* Appearance */}
+      <div className="px-4 lg:px-6 pt-6">
+        <p className="section-label mb-3">Appearance</p>
+        <div className="card px-4 py-3.5">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-text">Theme</p>
+            <div className="flex rounded-md border border-border overflow-hidden">
+              {themeOptions.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => handleTheme(value)}
+                  className={`px-3 py-1.5 text-sm transition-colors ${
+                    theme === value
+                      ? 'bg-elev border-accent text-text font-medium'
+                      : 'text-muted hover:text-text'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Data export */}
       <div className="px-4 lg:px-6 pt-6">
         <p className="section-label mb-3">Data</p>
@@ -334,7 +436,7 @@ export function Settings() {
           {[
             { label: 'Export accounts',        hint: `${accounts.length} account${accounts.length !== 1 ? 's' : ''}`,           onClick: () => exportAccounts(accounts) },
             { label: 'Export subscriptions',   hint: `${subs.length} subscription${subs.length !== 1 ? 's' : ''}`,             onClick: () => exportSubscriptions(subs) },
-            { label: 'Export balance history', hint: `${snapshots.length} snapshot${snapshots.length !== 1 ? 's' : ''}`,       onClick: () => exportSnapshots(snapshots as any[], accounts) },
+            { label: 'Export balance history', hint: `${snapshots.length} snapshot${snapshots.length !== 1 ? 's' : ''}`,       onClick: () => exportSnapshots(snapshots, accounts) },
             { label: 'Export goals',           hint: `${goals.length} goal${goals.length !== 1 ? 's' : ''}`,                   onClick: () => exportGoals(goals) }
           ].map(({ label, hint, onClick }) => (
             <button

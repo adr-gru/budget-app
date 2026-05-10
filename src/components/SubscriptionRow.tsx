@@ -2,7 +2,7 @@ import { differenceInCalendarDays, parseISO, format } from 'date-fns'
 import type { Subscription } from '../lib/supabase'
 import { BUCKET_META } from '../lib/buckets'
 import { formatMoney } from '../lib/money'
-import { monthlyEquivalentCents } from '../data/subscriptions'
+import { monthlyEquivalentCents, skipNextCharge, useUpdateSubscription } from '../data/subscriptions'
 
 const CADENCE_LABEL: Record<string, string> = {
   weekly:  '/wk',
@@ -14,9 +14,19 @@ interface Props {
   subscription: Subscription
   onEdit: () => void
   onDelete: () => void
+  onSkip?: () => void
 }
 
-export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
+export function SubscriptionRow({ subscription: s, onEdit, onDelete, onSkip }: Props) {
+  const updateSub = useUpdateSubscription()
+
+  function handleSkip() {
+    if (onSkip) {
+      onSkip()
+    } else {
+      updateSub.mutate({ id: s.id, next_charge_on: skipNextCharge(s) })
+    }
+  }
   const bucketMeta = BUCKET_META[s.bucket]
   const nextDate = parseISO(s.next_charge_on)
   const daysUntil = differenceInCalendarDays(nextDate, new Date())
@@ -52,6 +62,9 @@ export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
         <span className="text-xs font-normal text-muted">{CADENCE_LABEL[s.cadence]}</span>
       </span>
       <div className="flex items-center gap-1 flex-shrink-0">
+        <button onClick={handleSkip} disabled={updateSub.isPending} className="btn-ghost p-2 text-muted" aria-label="Skip this cycle">
+          <IconSkip />
+        </button>
         <button onClick={onEdit} className="btn-ghost p-2" aria-label="Edit">
           <IconEdit />
         </button>
@@ -60,6 +73,15 @@ export function SubscriptionRow({ subscription: s, onEdit, onDelete }: Props) {
         </button>
       </div>
     </div>
+  )
+}
+
+function IconSkip() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 14 20 9 15 4"/>
+      <path d="M4 20v-7a4 4 0 0 1 4-4h12"/>
+    </svg>
   )
 }
 

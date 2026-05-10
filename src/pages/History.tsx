@@ -5,11 +5,12 @@ import { supabase } from '../lib/supabase'
 import { useProfile } from '../data/profile'
 import { useAccounts } from '../data/accounts'
 import { computeActivity } from '../data/snapshots'
-import type { BalanceSnapshot } from '../lib/supabase'
+import type { Account, BalanceSnapshot } from '../lib/supabase'
 import { currentCycleStart, cycleEnd, cycleLabel, cycleKey, prevCycle, todayISO } from '../lib/cycle'
 import { ACCOUNT_TYPE_META } from '../lib/accountTypes'
 import { formatMoney } from '../lib/money'
 import { Skeleton } from '../components/Skeleton'
+import { NetWorthChart } from '../components/NetWorthChart'
 
 const CYCLES_TO_SHOW = 10
 
@@ -29,6 +30,24 @@ function usePastSnapshots(anchor: string) {
       return data as BalanceSnapshot[]
     }
   })
+}
+
+function computeNetWorthAtCycleEnd(
+  allSnapshots: BalanceSnapshot[],
+  accounts: Account[],
+  cycleStart: Date
+): number {
+  const end = cycleEnd(cycleStart)
+  const endMs = end.getTime()
+
+  return accounts.reduce((sum, account) => {
+    const acctSnaps = allSnapshots
+      .filter(s => s.account_id === account.id && new Date(s.recorded_at).getTime() <= endMs)
+    if (acctSnaps.length === 0) return sum
+    const latest = acctSnaps[acctSnaps.length - 1]
+    const meta = ACCOUNT_TYPE_META[account.type]
+    return sum + (meta.isDebt ? -latest.balance_cents : latest.balance_cents)
+  }, 0)
 }
 
 export function History() {
@@ -51,12 +70,29 @@ export function History() {
     setExpanded(prev => prev === key ? null : key)
   }
 
+  const chartDataPoints = [...pastCycles]
+    .reverse()
+    .map(cycleStart => ({
+      label: cycleLabel(cycleStart),
+      netWorth: computeNetWorthAtCycleEnd(allSnapshots, accounts, cycleStart)
+    }))
+
+  const nonZeroCount = chartDataPoints.filter(d => d.netWorth !== 0).length
+  const showChart = !isLoading && nonZeroCount >= 2
+
   return (
     <div className="pb-24 lg:pb-8">
       <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border">
         <h1 className="page-title">History</h1>
         <p className="text-xs text-muted mt-0.5">Past {CYCLES_TO_SHOW} pay periods</p>
       </div>
+
+      {showChart && (
+        <div className="px-4 lg:px-6 pt-6">
+          <p className="section-label mb-3">Net worth trend</p>
+          <NetWorthChart dataPoints={chartDataPoints} />
+        </div>
+      )}
 
       {isLoading ? (
         <div className="px-4 lg:px-6 pt-4 flex flex-col gap-0">
@@ -87,6 +123,13 @@ export function History() {
             return acc
           }, [] as { type: string; delta: number }[])
 
+          const netDelta = accounts.reduce((sum, a) => {
+            const act = activityMap.get(a.id)
+            if (!act) return sum
+            const meta = ACCOUNT_TYPE_META[a.type]
+            return sum + (meta.isDebt ? -act.delta : act.delta)
+          }, 0)
+
           const hasData = activityMap.size > 0
 
           return (
@@ -97,23 +140,23 @@ export function History() {
               >
                 <div>
                   <p className="text-sm font-medium text-text">{cycleLabel(cycleStart)}</p>
-                  {!hasData && <p className="text-xs text-muted mt-0.5">No balance updates</p>}
-                  {hasData && !isExpanded && (
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      {typeActivity.map(({ type, delta }) => {
-                        const meta = ACCOUNT_TYPE_META[type as keyof typeof ACCOUNT_TYPE_META]
-                        return (
-                          <span key={type} className={`font-mono text-xs tabular-nums ${
-                            meta.isDebt
-                              ? delta > 0 ? 'text-danger' : 'text-success'
-                              : delta > 0 ? 'text-success' : 'text-danger'
-                          }`}>
-                            {meta.label}: {delta > 0 ? '+' : ''}{formatMoney(delta)}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                    <span className={`font-mono text-xs tabular-nums ${netDelta > 0 ? 'text-success' : 'text-danger'}`}>
+                      Net: {netDelta > 0 ? '+' : ''}{formatMoney(netDelta)}
+                    </span>
+                    {hasData && !isExpanded && typeActivity.map(({ type, delta }) => {
+                      const meta = ACCOUNT_TYPE_META[type as keyof typeof ACCOUNT_TYPE_META]
+                      return (
+                        <span key={type} className={`font-mono text-xs tabular-nums ${
+                          meta.isDebt
+                            ? delta > 0 ? 'text-danger' : 'text-success'
+                            : delta > 0 ? 'text-success' : 'text-danger'
+                        }`}>
+                          {meta.label}: {delta > 0 ? '+' : ''}{formatMoney(delta)}
+                        </span>
+                      )
+                    })}
+                  </div>
                 </div>
                 <svg
                   width="14" height="14" viewBox="0 0 24 24" fill="none"

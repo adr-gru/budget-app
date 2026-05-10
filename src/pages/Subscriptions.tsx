@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   useSubscriptions, useAddSubscription, useUpdateSubscription,
   useDeactivateSubscription, advanceNextCharge, monthlyEquivalentCents,
@@ -6,6 +6,7 @@ import {
 } from '../data/subscriptions'
 import { SubscriptionRow } from '../components/SubscriptionRow'
 import { Sheet } from '../components/Sheet'
+import { ConfirmSheet } from '../components/ConfirmSheet'
 import { Skeleton } from '../components/Skeleton'
 import { BUCKETS, BUCKET_META } from '../lib/buckets'
 import { formatMoney, parseCents, formatDollars } from '../lib/money'
@@ -25,9 +26,11 @@ export function Subscriptions() {
   const suggestions = useSuggestedSubscriptions()
   const addSub      = useAddSubscription()
 
-  const [editTarget, setEditTarget] = useState<Subscription | null>(null)
-  const [adding,     setAdding]     = useState(false)
+  const [editTarget,       setEditTarget]       = useState<Subscription | null>(null)
+  const [adding,           setAdding]           = useState(false)
+  const [confirmDeleteId,  setConfirmDeleteId]  = useState<string | null>(null)
   const deactivate = useDeactivateSubscription()
+  const advancedIds = useRef<Set<string>>(new Set())
 
   async function handleAddSuggestion(s: SuggestedSubscription) {
     await addSub.mutateAsync({
@@ -42,11 +45,12 @@ export function Subscriptions() {
   useEffect(() => {
     subs.forEach(s => {
       const advanced = advanceNextCharge(s)
-      if (advanced !== s.next_charge_on) {
+      if (advanced !== s.next_charge_on && !advancedIds.current.has(s.id)) {
+        advancedIds.current.add(s.id)
         updateSub.mutate({ id: s.id, next_charge_on: advanced })
       }
     })
-  }, [subs.length])
+  }, [subs])
 
   const monthlyTotal = subs.reduce((sum, s) => sum + monthlyEquivalentCents(s), 0)
 
@@ -55,9 +59,8 @@ export function Subscriptions() {
     return acc
   }, {} as Record<Bucket, Subscription[]>)
 
-  async function handleDelete(id: string) {
-    if (!confirm('Remove this subscription?')) return
-    await deactivate.mutateAsync(id)
+  function handleDelete(id: string) {
+    setConfirmDeleteId(id)
   }
 
   return (
@@ -66,7 +69,7 @@ export function Subscriptions() {
         <div>
           <h1 className="page-title">Subscriptions</h1>
           {monthlyTotal > 0 && (
-            <p className="font-mono text-xs text-muted mt-0.5 tabular-nums">{formatMoney(monthlyTotal)}/mo total</p>
+            <p className="font-mono text-xs text-muted mt-0.5 tabular-nums">{formatMoney(monthlyTotal)}/mo · {formatMoney(monthlyTotal * 12)}/yr</p>
           )}
         </div>
         <button onClick={() => setAdding(true)} className="btn-ghost text-xs gap-1.5">
@@ -162,6 +165,20 @@ export function Subscriptions() {
         <SubscriptionSheet
           existing={null}
           onClose={() => setAdding(false)}
+        />
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmSheet
+          title="Remove subscription"
+          message="This subscription will be removed."
+          confirmLabel="Remove"
+          destructive
+          onConfirm={async () => {
+            await deactivate.mutateAsync(confirmDeleteId)
+            setConfirmDeleteId(null)
+          }}
+          onClose={() => setConfirmDeleteId(null)}
         />
       )}
     </div>

@@ -95,6 +95,15 @@ export function advanceNextCharge(sub: Subscription): string {
   return format(next, 'yyyy-MM-dd')
 }
 
+// Returns next_charge_on advanced by exactly one cadence period, regardless of whether the date is past
+export function skipNextCharge(sub: Subscription): string {
+  let next = parseISO(sub.next_charge_on)
+  if (sub.cadence === 'weekly')        next = addDays(next, 7)
+  else if (sub.cadence === 'monthly')  next = addMonths(next, 1)
+  else                                 next = addYears(next, 1)
+  return format(next, 'yyyy-MM-dd')
+}
+
 // Returns subscriptions whose next_charge_on falls within the cycle
 export function subsThisCycle(subs: Subscription[], cycleStart: Date): Subscription[] {
   const end = cycleEnd(cycleStart)

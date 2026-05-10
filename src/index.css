@@ -2,6 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-bg:      #F9FAFB;
+  --color-surface: #FFFFFF;
+  --color-elev:    #F3F4F6;
+  --color-border:  #E5E7EB;
+  --color-muted:   #6B7280;
+  --color-subtle:  #374151;
+  --color-text:    #111827;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg:      #0F1117;
+    --color-surface: #1A1D27;
+    --color-elev:    #22263A;
+    --color-border:  #2E3147;
+    --color-muted:   #8B94A8;
+    --color-subtle:  #9AA0B2;
+    --color-text:    #E8EAED;
+  }
+}
+
+[data-theme="dark"] {
+  --color-bg:      #0F1117;
+  --color-surface: #1A1D27;
+  --color-elev:    #22263A;
+  --color-border:  #2E3147;
+  --color-muted:   #8B94A8;
+  --color-subtle:  #9AA0B2;
+  --color-text:    #E8EAED;
+}
+
+[data-theme="light"] {
+  --color-bg:      #F9FAFB;
+  --color-surface: #FFFFFF;
+  --color-elev:    #F3F4F6;
+  --color-border:  #E5E7EB;
+  --color-muted:   #6B7280;
+  --color-subtle:  #374151;
+  --color-text:    #111827;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] .bg-bg          { background-color: var(--color-bg) }
+[data-theme="dark"] .bg-surface     { background-color: var(--color-surface) }
+[data-theme="dark"] .bg-elev        { background-color: var(--color-elev) }
+[data-theme="dark"] .border-border  { border-color: var(--color-border) }
+[data-theme="dark"] .text-text      { color: var(--color-text) }
+[data-theme="dark"] .text-muted     { color: var(--color-muted) }
+[data-theme="dark"] .text-subtle    { color: var(--color-subtle) }
+[data-theme="dark"] .card           { background-color: var(--color-surface); border-color: var(--color-border) }
+[data-theme="dark"] .field          { background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text) }
+[data-theme="dark"] .btn            { background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text) }
+[data-theme="dark"] .btn:hover      { background-color: var(--color-elev) }
+[data-theme="dark"] .btn-ghost      { color: var(--color-muted) }
+[data-theme="dark"] .btn-ghost:hover { color: var(--color-text); background-color: var(--color-elev) }
+[data-theme="dark"] input[type='date'] { color-scheme: dark }
+
 @layer base {
   html, body, #root {
     height: 100%;

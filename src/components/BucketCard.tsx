@@ -7,15 +7,17 @@ interface Props {
   pct: number
   targetCents: number
   actualCents: number
+  onClick?: () => void
 }
 
-export function BucketCard({ bucket, pct, targetCents, actualCents }: Props) {
+export function BucketCard({ bucket, pct, targetCents, actualCents, onClick }: Props) {
   const meta = BUCKET_META[bucket]
   const ratio = targetCents > 0 ? Math.min(actualCents / targetCents, 1) : 0
   const over = actualCents > targetCents && targetCents > 0
+  const nearLimit = !over && targetCents > 0 && actualCents / targetCents >= 0.8
   const remaining = targetCents - actualCents
 
-  return (
+  const inner = (
     <div className="card px-4 py-3.5">
       <div className="flex items-baseline justify-between mb-2.5">
         <div className="flex items-center gap-2">
@@ -45,8 +47,16 @@ export function BucketCard({ bucket, pct, targetCents, actualCents }: Props) {
         />
       </div>
       {over ? (
-        <p className="text-xs text-danger mt-1.5 font-mono tabular-nums">
-          {formatMoney(actualCents - targetCents)} over budget
+        <div className="mt-1.5">
+          <p className="text-xs text-danger font-medium">Over budget</p>
+          <p className="text-xs text-danger font-mono tabular-nums">
+            Over by {formatMoney(actualCents - targetCents)}
+          </p>
+        </div>
+      ) : nearLimit ? (
+        <p className="text-xs text-yellow-500 mt-1.5 font-mono tabular-nums flex items-center gap-1">
+          <span>⚠️</span>
+          <span>{formatMoney(remaining)} left</span>
         </p>
       ) : targetCents > 0 ? (
         <p className="text-xs text-muted mt-1.5 font-mono tabular-nums">
@@ -55,4 +65,14 @@ export function BucketCard({ bucket, pct, targetCents, actualCents }: Props) {
       ) : null}
     </div>
   )
+
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="w-full text-left">
+        {inner}
+      </button>
+    )
+  }
+
+  return inner
 }

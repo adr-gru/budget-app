@@ -31,9 +31,16 @@ export function useAddAccount() {
     mutationFn: async (input: AddAccountInput) => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
+      const { data: existing } = await supabase
+        .from('accounts')
+        .select('sort_order')
+        .eq('user_id', user.id)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+      const nextOrder = (existing?.[0]?.sort_order ?? 0) + 1
       const { data, error } = await supabase
         .from('accounts')
-        .insert({ ...input, user_id: user.id })
+        .insert({ ...input, user_id: user.id, sort_order: nextOrder })
         .select()
         .single()
       if (error) throw error
