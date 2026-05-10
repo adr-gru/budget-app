@@ -124,13 +124,15 @@ Deno.serve(async (req: Request) => {
           const appAccountId = accountIdByPlaid.get(tx.account_id) ?? null
 
           // Plaid amounts: positive = money out (debit/purchase), negative = money in (credit)
-          const amountCents = Math.round(Math.abs(tx.amount as number) * 100)
+          const rawAmount = tx.amount as number
+          const amountCents = Math.round(Math.abs(rawAmount) * 100)
 
           return {
             user_id: user.id,
             account_id: appAccountId,
             plaid_transaction_id: tx.transaction_id as string,
             amount_cents: amountCents,
+            is_income: rawAmount < 0,
             description: (tx.merchant_name ?? tx.name ?? '') as string,
             merchant_name: (tx.merchant_name ?? null) as string | null,
             pfc_primary: primary || null,
@@ -178,6 +180,7 @@ Deno.serve(async (req: Request) => {
             pfc_primary: r.pfc_primary,
             pfc_detailed: r.pfc_detailed,
             amount_cents: r.amount_cents,
+            is_income: r.is_income,
             date: r.date,
           })
           .eq('plaid_transaction_id', r.plaid_transaction_id)

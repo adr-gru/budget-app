@@ -29,8 +29,20 @@ export function Subscriptions() {
   const [editTarget,       setEditTarget]       = useState<Subscription | null>(null)
   const [adding,           setAdding]           = useState(false)
   const [confirmDeleteId,  setConfirmDeleteId]  = useState<string | null>(null)
+  const [dismissed,        setDismissed]        = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('dismissed_suggestions') ?? '[]')) }
+    catch { return new Set() }
+  })
   const deactivate = useDeactivateSubscription()
   const advancedIds = useRef<Set<string>>(new Set())
+
+  function dismissSuggestion(name: string) {
+    setDismissed(prev => {
+      const next = new Set(prev).add(name)
+      localStorage.setItem('dismissed_suggestions', JSON.stringify([...next]))
+      return next
+    })
+  }
 
   async function handleAddSuggestion(s: SuggestedSubscription) {
     await addSub.mutateAsync({
@@ -59,10 +71,6 @@ export function Subscriptions() {
     return acc
   }, {} as Record<Bucket, Subscription[]>)
 
-  function handleDelete(id: string) {
-    setConfirmDeleteId(id)
-  }
-
   return (
     <div className="pb-24 lg:pb-8">
       <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border flex items-center justify-between">
@@ -86,41 +94,6 @@ export function Subscriptions() {
         </div>
       ) : (
         <>
-          {suggestions.filter(s => s.source === 'recurring').length > 0 && (
-            <SuggestionGroup
-              title="Detected recurring"
-              items={suggestions.filter(s => s.source === 'recurring')}
-              onAdd={handleAddSuggestion}
-              isPending={addSub.isPending}
-            />
-          )}
-
-          {suggestions.filter(s => s.source === 'category').length > 0 && (
-            <SuggestionGroup
-              title="Possible subscriptions"
-              subtitle="Seen once in a subscription-like category"
-              items={suggestions.filter(s => s.source === 'category')}
-              onAdd={handleAddSuggestion}
-              isPending={addSub.isPending}
-            />
-          )}
-
-          {subs.length === 0 && suggestions.length === 0 && (
-            <div className="px-4 lg:px-6 pt-12 flex flex-col items-center text-center">
-              <div className="w-14 h-14 rounded-full bg-elev flex items-center justify-center mb-4">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-                  <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-                  <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-                </svg>
-              </div>
-              <p className="text-base font-display font-semibold text-text mb-1">No subscriptions yet</p>
-              <p className="text-sm text-muted max-w-xs mb-4">Import transactions to detect recurring subscriptions automatically, or add one manually.</p>
-              <button onClick={() => setAdding(true)} className="btn text-sm px-5 py-2.5">
-                Add manually
-              </button>
-            </div>
-          )}
-
           {BUCKETS.map(b => {
             const list = subsByBucket[b]
             if (list.length === 0) return null
@@ -144,13 +117,58 @@ export function Subscriptions() {
                       key={s.id}
                       subscription={s}
                       onEdit={() => setEditTarget(s)}
-                      onDelete={() => handleDelete(s.id)}
+                      onDelete={() => setConfirmDeleteId(s.id)}
                     />
                   ))}
                 </div>
               </div>
             )
           })}
+
+          {(() => {
+            const visibleRecurring = suggestions.filter(s => s.source === 'recurring' && !dismissed.has(s.name))
+            const visibleCategory  = suggestions.filter(s => s.source === 'category'  && !dismissed.has(s.name))
+            return (
+              <>
+                {visibleRecurring.length > 0 && (
+                  <SuggestionGroup
+                    title="Detected recurring"
+                    items={visibleRecurring}
+                    onAdd={handleAddSuggestion}
+                    onDismiss={dismissSuggestion}
+                    isPending={addSub.isPending}
+                  />
+                )}
+                {visibleCategory.length > 0 && (
+                  <SuggestionGroup
+                    title="Possible subscriptions"
+                    subtitle="Seen once in a subscription-like category"
+                    items={visibleCategory}
+                    onAdd={handleAddSuggestion}
+                    onDismiss={dismissSuggestion}
+                    isPending={addSub.isPending}
+                  />
+                )}
+              </>
+            )
+          })()}
+
+          {subs.length === 0 && suggestions.filter(s => !dismissed.has(s.name)).length === 0 && (
+            <div className="px-4 lg:px-6 pt-12 flex flex-col items-center text-center">
+              <div className="w-14 h-14 rounded-full bg-elev flex items-center justify-center mb-4">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
+                  <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                  <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                </svg>
+              </div>
+              <p className="text-base font-display font-semibold text-text mb-1">No subscriptions yet</p>
+              <p className="text-sm text-muted max-w-xs mb-4">Import transactions to detect recurring subscriptions automatically, or add one manually.</p>
+              <button onClick={() => setAdding(true)} className="btn text-sm px-5 py-2.5">
+                Add manually
+              </button>
+            </div>
+          )}
+
         </>
       )}
 
@@ -186,12 +204,13 @@ export function Subscriptions() {
 }
 
 function SuggestionGroup({
-  title, subtitle, items, onAdd, isPending
+  title, subtitle, items, onAdd, onDismiss, isPending
 }: {
   title: string
   subtitle?: string
   items: SuggestedSubscription[]
   onAdd: (s: SuggestedSubscription) => void
+  onDismiss: (name: string) => void
   isPending: boolean
 }) {
   return (
@@ -218,6 +237,15 @@ function SuggestionGroup({
               className="btn text-xs py-1.5 flex-shrink-0"
             >
               Add
+            </button>
+            <button
+              onClick={() => onDismiss(s.name)}
+              aria-label="Dismiss"
+              className="p-1 text-muted hover:text-text transition-colors flex-shrink-0"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
             </button>
           </div>
         ))}

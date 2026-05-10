@@ -336,8 +336,8 @@ export function Transactions() {
                           )}
                         </div>
                       </div>
-                      <span className="font-mono text-sm font-semibold tabular-nums text-text flex-shrink-0">
-                        {formatMoney(tx.amount_cents)}
+                      <span className={`font-mono text-sm font-semibold tabular-nums flex-shrink-0 ${tx.is_income ? 'text-success' : 'text-text'}`}>
+                        {tx.is_income ? '+' : ''}{formatMoney(tx.amount_cents)}
                       </span>
                     </button>
                   )
@@ -419,7 +419,9 @@ function EditTransactionSheet({
 
         <div className="flex items-center justify-between text-xs text-muted -mt-1">
           <span>{format(parseISO(transaction.date), 'MMMM d, yyyy')}</span>
-          <span className="font-mono font-semibold tabular-nums">{formatMoney(transaction.amount_cents)}</span>
+          <span className={`font-mono font-semibold tabular-nums ${transaction.is_income ? 'text-success' : ''}`}>
+            {transaction.is_income ? '+' : ''}{formatMoney(transaction.amount_cents)}
+          </span>
         </div>
 
         <button type="submit" disabled={update.isPending} className="btn-primary py-3">

@@ -101,6 +101,7 @@ export interface Transaction {
   bucket:                TransactionBucket
   tag:                   string | null
   category_override:     boolean
+  is_income:             boolean
   created_at:            string
 }
 
