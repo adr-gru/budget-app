@@ -9,9 +9,10 @@ interface Props {
   account: Account
   currentBalance: number | null
   onClose: () => void
+  onEdit?: () => void
 }
 
-export function UpdateBalanceSheet({ account, currentBalance, onClose }: Props) {
+export function UpdateBalanceSheet({ account, currentBalance, onClose, onEdit }: Props) {
   const [value, setValue] = useState(currentBalance !== null ? formatDollars(currentBalance) : '')
   const updateBalance = useUpdateBalance()
   const meta = ACCOUNT_TYPE_META[account.type]
@@ -62,6 +63,15 @@ export function UpdateBalanceSheet({ account, currentBalance, onClose }: Props) 
             {updateBalance.isPending ? 'Saving…' : 'Update balance'}
           </button>
         </form>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="w-full mt-3 py-2.5 text-sm text-muted hover:text-text transition-colors"
+          >
+            Edit or delete account →
+          </button>
+        )}
       </div>
     </Sheet>
   )
