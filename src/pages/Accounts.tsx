@@ -172,7 +172,6 @@ export function Accounts() {
           account={balanceTarget}
           currentBalance={balanceMap.get(balanceTarget.id) ?? null}
           onClose={() => setBalanceTarget(null)}
-          onEdit={() => { setBalanceTarget(null); setEditTarget(balanceTarget) }}
         />
       )}
 
