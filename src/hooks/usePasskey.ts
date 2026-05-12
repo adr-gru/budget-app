@@ -15,6 +15,16 @@ function getDeviceName(): string {
   return 'Browser'
 }
 
+async function throwFnError(err: unknown): Promise<never> {
+  let msg = (err as { message?: string }).message ?? 'Request failed'
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = await (err as any).context?.json?.()
+    if (body?.error) msg = body.error
+  } catch { /* ignore */ }
+  throw new Error(msg)
+}
+
 export function usePasskey() {
   const qc = useQueryClient()
 
@@ -23,7 +33,7 @@ export function usePasskey() {
       'passkey-register-options',
       { body: {} }
     )
-    if (optErr) throw optErr
+    if (optErr) await throwFnError(optErr)
     if (options?.error) throw new Error(options.error)
 
     const registrationResponse = await startRegistration(options)
@@ -32,7 +42,7 @@ export function usePasskey() {
       'passkey-register-verify',
       { body: { registrationResponse, deviceName: getDeviceName() } }
     )
-    if (verErr) throw verErr
+    if (verErr) await throwFnError(verErr)
     if (result?.error) throw new Error(result.error)
 
     qc.invalidateQueries({ queryKey: ['passkeys'] })
@@ -43,7 +53,7 @@ export function usePasskey() {
       'passkey-auth-options',
       { body: {} }
     )
-    if (optErr) throw optErr
+    if (optErr) await throwFnError(optErr)
     if (options?.error) throw new Error(options.error)
 
     const authResponse = await startAuthentication(options)
@@ -52,15 +62,7 @@ export function usePasskey() {
       'passkey-auth-verify',
       { body: { authenticationResponse: authResponse, challenge: options.challenge } }
     )
-    if (verErr) {
-      let msg = verErr.message
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const body = await (verErr as any).context?.json?.()
-        if (body?.error) msg = body.error
-      } catch { /* ignore */ }
-      throw new Error(msg)
-    }
+    if (verErr) await throwFnError(verErr)
     if (result?.error) throw new Error(result.error)
 
     const { error: sessionError } = await supabase.auth.verifyOtp({
