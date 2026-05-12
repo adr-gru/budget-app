@@ -52,10 +52,24 @@ export function usePasskey() {
       'passkey-auth-verify',
       { body: { authenticationResponse: authResponse, challenge: options.challenge } }
     )
-    if (verErr) throw verErr
+    if (verErr) {
+      let msg = verErr.message
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const body = await (verErr as any).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch { /* ignore */ }
+      throw new Error(msg)
+    }
     if (result?.error) throw new Error(result.error)
 
-    window.location.href = result.action_link
+    const { error: sessionError } = await supabase.auth.verifyOtp({
+      token_hash: result.hashed_token,
+      type: 'magiclink',
+    })
+    if (sessionError) throw sessionError
+
+    window.location.href = '/'
   }
 
   return { register, authenticate }
