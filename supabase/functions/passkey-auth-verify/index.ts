@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
-import { verifyAuthenticationResponse } from 'npm:@simplewebauthn/server@9'
+import { verifyAuthenticationResponse } from 'npm:@simplewebauthn/server@10'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -75,14 +75,13 @@ Deno.serve(async (req: Request) => {
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
       type: 'magiclink',
       email: user.email,
-      options: { redirectTo: `${origin}/auth/callback` },
     })
 
-    if (linkError || !linkData?.properties?.action_link) {
+    if (linkError || !linkData?.properties?.hashed_token) {
       return json({ error: 'Failed to generate sign-in link' }, 500)
     }
 
-    return json({ action_link: linkData.properties.action_link })
+    return json({ hashed_token: linkData.properties.hashed_token })
   } catch (err) {
     return json({ error: String(err) }, 500)
   }

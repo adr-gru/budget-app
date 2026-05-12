@@ -36,7 +36,7 @@ export function usePasskey() {
     if (optErr) await throwFnError(optErr)
     if (options?.error) throw new Error(options.error)
 
-    const registrationResponse = await startRegistration(options)
+    const registrationResponse = await startRegistration({ optionsJSON: options })
 
     const { data: result, error: verErr } = await supabase.functions.invoke(
       'passkey-register-verify',
@@ -56,7 +56,7 @@ export function usePasskey() {
     if (optErr) await throwFnError(optErr)
     if (options?.error) throw new Error(options.error)
 
-    const authResponse = await startAuthentication(options)
+    const authResponse = await startAuthentication({ optionsJSON: options })
 
     const { data: result, error: verErr } = await supabase.functions.invoke(
       'passkey-auth-verify',

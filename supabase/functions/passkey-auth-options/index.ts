@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
-import { generateAuthenticationOptions } from 'npm:@simplewebauthn/server@9'
+import { generateAuthenticationOptions } from 'npm:@simplewebauthn/server@10'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
