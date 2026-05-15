@@ -9,3 +9,6 @@ dist-ssr
 *.log
 .vite
 *.tsbuildinfo
+.vscode/
+.idea/
+coverage/
