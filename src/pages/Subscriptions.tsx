@@ -310,7 +310,7 @@ function SubscriptionSheet({
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Netflix, Spotify, iCloud"
             required
-            autoFocus
+           
             className="field"
           />
         </div>

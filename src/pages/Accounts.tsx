@@ -604,7 +604,7 @@ function AddAccountSheet({ onClose }: { onClose: () => void }) {
               value={name}
               onChange={e => setName(e.target.value)}
               required
-              autoFocus
+             
               placeholder="e.g. Chase Checking"
               className="field"
             />
@@ -780,7 +780,7 @@ function EditAccountSheet({
             <label className="text-xs text-muted block mb-1.5">Nickname</label>
             <input
               type="text" value={name} onChange={e => setName(e.target.value)}
-              required autoFocus className="field"
+              required className="field"
             />
           </div>
           {account.type === 'credit_card' && (

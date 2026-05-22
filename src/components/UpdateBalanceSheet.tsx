@@ -72,7 +72,6 @@ export function UpdateBalanceSheet({ account, currentBalance, onClose }: Props) 
                 value={balance}
                 onChange={e => setBalance(e.target.value)}
                 placeholder="0.00"
-                autoFocus
                 className="field pl-7 text-base tabular-nums"
               />
             </div>

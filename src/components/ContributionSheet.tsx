@@ -49,7 +49,6 @@ export function ContributionSheet({ goalId, goalName, onClose }: Props) {
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder="0.00"
-                autoFocus
                 required
                 className="field pl-7 font-mono tabular-nums text-base"
               />

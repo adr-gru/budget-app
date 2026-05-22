@@ -421,7 +421,7 @@ function GoalSheet({
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Emergency fund, Vacation, New car"
             required
-            autoFocus
+           
             className="field"
           />
         </div>
