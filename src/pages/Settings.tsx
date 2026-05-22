@@ -261,8 +261,6 @@ export function Settings() {
 
   const paycheck   = profile ? formatDollars(profile.paycheck_cents) : '0.00'
   const anchor     = profile?.cycle_anchor_date ?? todayISO()
-  const totalPct   = (profile?.needs_pct ?? 50) + (profile?.wants_pct ?? 30) + (profile?.savings_pct ?? 20)
-
   // Local state for bucket percentages — all three are validated together before saving
   const [localNeeds,   setLocalNeeds]   = useState(String(profile?.needs_pct   ?? 50))
   const [localWants,   setLocalWants]   = useState(String(profile?.wants_pct   ?? 30))
