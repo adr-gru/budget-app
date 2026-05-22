@@ -94,6 +94,12 @@ export function History() {
         </div>
       )}
 
+      {!isLoading && !showChart && accounts.length > 0 && (
+        <div className="px-4 lg:px-6 pt-5">
+          <p className="text-xs text-muted">Net worth trend will appear once you have balance data from at least 2 pay cycles.</p>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="px-4 lg:px-6 pt-4 flex flex-col gap-0">
           {[0,1,2,3,4].map(i => (
@@ -141,7 +147,7 @@ export function History() {
                 <div>
                   <p className="text-sm font-medium text-text">{cycleLabel(cycleStart)}</p>
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span className={`font-mono text-xs tabular-nums ${netDelta > 0 ? 'text-success' : 'text-danger'}`}>
+                    <span className={`font-mono text-xs tabular-nums ${netDelta > 0 ? 'text-success' : netDelta < 0 ? 'text-danger' : 'text-muted'}`}>
                       Net: {netDelta > 0 ? '+' : ''}{formatMoney(netDelta)}
                     </span>
                     {hasData && !isExpanded && typeActivity.map(({ type, delta }) => {

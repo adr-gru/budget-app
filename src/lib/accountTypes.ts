@@ -1,4 +1,4 @@
-import type { AccountType } from './supabase'
+import type { Account, AccountType } from './supabase'
 
 export interface AccountTypeMeta {
   label: string
@@ -14,3 +14,7 @@ export const ACCOUNT_TYPE_META: Record<AccountType, AccountTypeMeta> = {
 }
 
 export const ACCOUNT_TYPES: AccountType[] = ['credit_card', 'checking', 'savings', 'investment']
+
+export function isLinked(a: Account): boolean {
+  return Boolean(a.plaid_item_id || a.teller_enrollment_id)
+}

@@ -3,7 +3,6 @@ import { useProfile, useUpsertProfile } from '../data/profile'
 import { useAccounts } from '../data/accounts'
 import { useSubscriptions } from '../data/subscriptions'
 import { useGoals } from '../data/goals'
-import { useLatestBalances } from '../data/snapshots'
 import { usePasskeyCredentials, useDeletePasskey } from '../data/passkeys'
 import { parseCents, formatDollars, formatMoney } from '../lib/money'
 import { useAuth } from '../auth/AuthProvider'
@@ -12,8 +11,9 @@ import { exportAccounts, exportSubscriptions, exportGoals, exportSnapshots, expo
 import { isNative } from '../lib/native'
 import { usePasskey, passkeySupported } from '../hooks/usePasskey'
 import { format, parseISO, addDays } from 'date-fns'
-import type { GoalContribution } from '../lib/supabase'
+import type { BalanceSnapshot, GoalContribution } from '../lib/supabase'
 import { getTheme, setTheme, type Theme } from '../lib/theme'
+import { supabase } from '../lib/supabase'
 
 function NumberField({
   label, hint, value, onSave, prefix, suffix,
@@ -253,18 +253,59 @@ export function Settings() {
   const { data: accounts = [] } = useAccounts()
   const { data: subs = [] } = useSubscriptions()
   const { data: goals = [] } = useGoals()
-  const { data: snapshots = [] } = useLatestBalances()
   const upsert = useUpsertProfile()
   const [saved, setSaved] = useState<string | null>(null)
   const [bucketError, setBucketError] = useState<string | null>(null)
   const [theme, setThemeState] = useState<Theme>(getTheme)
+  const [exportingSnapshots, setExportingSnapshots] = useState(false)
 
   const paycheck   = profile ? formatDollars(profile.paycheck_cents) : '0.00'
-  const needsPct   = String(profile?.needs_pct   ?? 50)
-  const wantsPct   = String(profile?.wants_pct   ?? 30)
-  const savingsPct = String(profile?.savings_pct ?? 20)
   const anchor     = profile?.cycle_anchor_date ?? todayISO()
   const totalPct   = (profile?.needs_pct ?? 50) + (profile?.wants_pct ?? 30) + (profile?.savings_pct ?? 20)
+
+  // Local state for bucket percentages — all three are validated together before saving
+  const [localNeeds,   setLocalNeeds]   = useState(String(profile?.needs_pct   ?? 50))
+  const [localWants,   setLocalWants]   = useState(String(profile?.wants_pct   ?? 30))
+  const [localSavings, setLocalSavings] = useState(String(profile?.savings_pct ?? 20))
+
+  // Keep local state in sync when profile loads or changes from elsewhere
+  useEffect(() => {
+    if (!profile) return
+    setLocalNeeds(String(profile.needs_pct))
+    setLocalWants(String(profile.wants_pct))
+    setLocalSavings(String(profile.savings_pct))
+  }, [profile?.needs_pct, profile?.wants_pct, profile?.savings_pct])
+
+  const localTotal = (Number(localNeeds) || 0) + (Number(localWants) || 0) + (Number(localSavings) || 0)
+  const bucketsDirty = localNeeds !== String(profile?.needs_pct ?? 50) ||
+                       localWants !== String(profile?.wants_pct ?? 30) ||
+                       localSavings !== String(profile?.savings_pct ?? 20)
+
+  async function saveBuckets() {
+    if (localTotal !== 100) {
+      setBucketError(`Percentages must add up to 100% (currently ${localTotal}%)`)
+      return
+    }
+    setBucketError(null)
+    await save({
+      needs_pct:   Math.round(Number(localNeeds)),
+      wants_pct:   Math.round(Number(localWants)),
+      savings_pct: Math.round(Number(localSavings)),
+    }, 'buckets')
+  }
+
+  async function handleExportSnapshots() {
+    setExportingSnapshots(true)
+    try {
+      const { data } = await supabase
+        .from('account_balance_snapshots')
+        .select('*')
+        .order('recorded_at', { ascending: false })
+      if (data) exportSnapshots(data as BalanceSnapshot[], accounts)
+    } finally {
+      setExportingSnapshots(false)
+    }
+  }
 
   const [anchorInput, setAnchorInput] = useState(anchor)
   useEffect(() => { setAnchorInput(anchor) }, [anchor])
@@ -321,53 +362,49 @@ export function Settings() {
           <p className="section-label">Budget allocation</p>
           <div className="flex items-center gap-2">
             {saved === 'buckets' && <span className="text-xs text-success font-medium">Saved</span>}
-            <span className={`font-mono text-xs tabular-nums font-semibold ${totalPct === 100 ? 'text-success' : 'text-danger'}`}>
-              {totalPct}% of 100%
+            <span className={`font-mono text-xs tabular-nums font-semibold ${localTotal === 100 ? 'text-success' : 'text-danger'}`}>
+              {localTotal}% of 100%
             </span>
           </div>
         </div>
         <div className="card px-4 py-0">
-          <NumberField
-            label="Needs"
-            hint="Housing, food, essentials"
-            value={needsPct}
-            suffix="%" step="1" min="0" max="100" placeholder="50"
-            onSave={raw => {
-              const newVal = Math.round(Number(raw) || 0)
-              const prospective = newVal + (profile?.wants_pct ?? 30) + (profile?.savings_pct ?? 20)
-              if (prospective > 100) { setBucketError(`Total would be ${prospective}% — must be 100% or less`); return }
-              setBucketError(null)
-              save({ needs_pct: newVal }, 'buckets')
-            }}
-          />
-          <NumberField
-            label="Wants"
-            hint="Entertainment, subscriptions"
-            value={wantsPct}
-            suffix="%" step="1" min="0" max="100" placeholder="30"
-            onSave={raw => {
-              const newVal = Math.round(Number(raw) || 0)
-              const prospective = (profile?.needs_pct ?? 50) + newVal + (profile?.savings_pct ?? 20)
-              if (prospective > 100) { setBucketError(`Total would be ${prospective}% — must be 100% or less`); return }
-              setBucketError(null)
-              save({ wants_pct: newVal }, 'buckets')
-            }}
-          />
-          <NumberField
-            label="Savings"
-            hint="Savings &amp; investments"
-            value={savingsPct}
-            suffix="%" step="1" min="0" max="100" placeholder="20"
-            onSave={raw => {
-              const newVal = Math.round(Number(raw) || 0)
-              const prospective = (profile?.needs_pct ?? 50) + (profile?.wants_pct ?? 30) + newVal
-              if (prospective > 100) { setBucketError(`Total would be ${prospective}% — must be 100% or less`); return }
-              setBucketError(null)
-              save({ savings_pct: newVal }, 'buckets')
-            }}
-          />
+          {([
+            { label: 'Needs',   hint: 'Housing, food, essentials',    value: localNeeds,   set: setLocalNeeds,   placeholder: '50' },
+            { label: 'Wants',   hint: 'Entertainment, subscriptions', value: localWants,   set: setLocalWants,   placeholder: '30' },
+            { label: 'Savings', hint: 'Savings & investments',        value: localSavings, set: setLocalSavings, placeholder: '20' },
+          ] as const).map(({ label, hint, value, set, placeholder }) => (
+            <div key={label} className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-text">{label}</p>
+                <p className="font-mono text-xs text-muted mt-0.5 tabular-nums">{hint}</p>
+              </div>
+              <div className="relative w-24 flex-shrink-0">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="1"
+                  min="0"
+                  max="100"
+                  value={value}
+                  onChange={e => { set(e.target.value); setBucketError(null) }}
+                  placeholder={placeholder}
+                  className="field text-right font-mono tabular-nums text-sm pr-6"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">%</span>
+              </div>
+            </div>
+          ))}
         </div>
         {bucketError && <p className="text-xs text-danger mt-2 px-1">{bucketError}</p>}
+        {bucketsDirty && (
+          <button
+            onClick={saveBuckets}
+            disabled={upsert.isPending}
+            className="btn-primary w-full py-2.5 mt-3 text-sm"
+          >
+            {upsert.isPending ? 'Saving…' : 'Save allocation'}
+          </button>
+        )}
       </div>
 
       {/* Pay cycle */}
@@ -434,25 +471,32 @@ export function Settings() {
         <p className="section-label mb-3">Data</p>
         <div className="card overflow-hidden">
           {[
-            { label: 'Export accounts',        hint: `${accounts.length} account${accounts.length !== 1 ? 's' : ''}`,           onClick: () => exportAccounts(accounts) },
-            { label: 'Export subscriptions',   hint: `${subs.length} subscription${subs.length !== 1 ? 's' : ''}`,             onClick: () => exportSubscriptions(subs) },
-            { label: 'Export balance history', hint: `${snapshots.length} snapshot${snapshots.length !== 1 ? 's' : ''}`,       onClick: () => exportSnapshots(snapshots, accounts) },
-            { label: 'Export goals',           hint: `${goals.length} goal${goals.length !== 1 ? 's' : ''}`,                   onClick: () => exportGoals(goals) }
-          ].map(({ label, hint, onClick }) => (
+            { label: 'Export accounts',        hint: `${accounts.length} account${accounts.length !== 1 ? 's' : ''}`,           onClick: () => exportAccounts(accounts),     loading: false },
+            { label: 'Export subscriptions',   hint: `${subs.length} subscription${subs.length !== 1 ? 's' : ''}`,             onClick: () => exportSubscriptions(subs),    loading: false },
+            { label: 'Export balance history', hint: 'All historical snapshots',                                                 onClick: handleExportSnapshots,              loading: exportingSnapshots },
+            { label: 'Export goals',           hint: `${goals.length} goal${goals.length !== 1 ? 's' : ''}`,                   onClick: () => exportGoals(goals),           loading: false }
+          ].map(({ label, hint, onClick, loading }) => (
             <button
               key={label}
               onClick={onClick}
-              className="w-full flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0 text-left hover:bg-elev/30 transition-colors"
+              disabled={loading}
+              className="w-full flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0 text-left hover:bg-elev/30 transition-colors disabled:opacity-60"
             >
               <div>
                 <p className="text-sm text-text">{label}</p>
                 <p className="text-xs text-muted mt-0.5">{hint}</p>
               </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
+              {loading ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted animate-spin flex-shrink-0">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              )}
             </button>
           ))}
           <AllContributionsExport goals={goals as any} />

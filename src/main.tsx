@@ -11,9 +11,17 @@ async function initNative() {
   if (!isNative) return
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
-    // Style.Dark = dark icons on light background
-    await StatusBar.setStyle({ style: Style.Dark })
-    await StatusBar.setBackgroundColor({ color: '#f5f5f7' })
+
+    const updateStatusBar = async () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+      await StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark })
+      await StatusBar.setBackgroundColor({ color: isDark ? '#0F1117' : '#F9FAFB' })
+    }
+
+    await updateStatusBar()
+
+    const observer = new MutationObserver(updateStatusBar)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
   } catch {
     // not running in Capacitor context
   }

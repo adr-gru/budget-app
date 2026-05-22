@@ -14,10 +14,11 @@ import { useLatestBalances, useCycleActivitySnapshots, computeActivity, useUpdat
 import { useProfile } from '../data/profile'
 import { AccountCard } from '../components/AccountCard'
 import { UpdateBalanceSheet } from '../components/UpdateBalanceSheet'
+import { ConfirmSheet } from '../components/ConfirmSheet'
 import { Sheet } from '../components/Sheet'
 import { Skeleton } from '../components/Skeleton'
 import { currentCycleStart, todayISO } from '../lib/cycle'
-import { ACCOUNT_TYPES, ACCOUNT_TYPE_META } from '../lib/accountTypes'
+import { ACCOUNT_TYPES, ACCOUNT_TYPE_META, isLinked } from '../lib/accountTypes'
 import { formatMoney, parseCents } from '../lib/money'
 import type { Account, AccountType } from '../lib/supabase'
 import type { PlaidLinkAccount } from '../lib/plaid.d'
@@ -28,10 +29,6 @@ function mapPlaidType(type: string, subtype: string): AccountType {
   const savingsSubtypes = ['savings', 'cd', 'money market', 'cash management']
   if (savingsSubtypes.includes(subtype.toLowerCase())) return 'savings'
   return 'checking'
-}
-
-function isLinked(a: Account) {
-  return Boolean(a.plaid_item_id || a.teller_enrollment_id)
 }
 
 export function Accounts() {
@@ -70,8 +67,9 @@ export function Accounts() {
             <button
               onClick={() => plaidSync.mutate()}
               disabled={plaidSync.isPending}
-              className="btn-ghost text-xs gap-1.5"
+              className={`btn-ghost text-xs gap-1.5 ${plaidSync.isError ? 'text-danger' : ''}`}
               aria-label="Sync balances"
+              title={plaidSync.isError ? 'Sync failed — tap to retry' : undefined}
             >
               <svg
                 width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -81,7 +79,7 @@ export function Accounts() {
                 <polyline points="23 4 23 10 17 10"/>
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
               </svg>
-              {plaidSync.isPending ? 'Syncing…' : 'Sync'}
+              {plaidSync.isPending ? 'Syncing…' : plaidSync.isError ? 'Sync failed' : 'Sync'}
             </button>
           )}
           <button onClick={() => setShowManage(true)} className="btn text-sm">
@@ -209,6 +207,20 @@ function ManageAccountsSheet({
   const updateAccount                   = useUpdateAccount()
   const removeItem                      = usePlaidRemoveItem()
   const { data: plaidItems = [] }       = usePlaidItems()
+
+  // Keep ordered list in sync with live accounts: preserve user's custom sort,
+  // add newly appeared accounts at the end, drop removed ones.
+  useEffect(() => {
+    setOrdered(prev => {
+      const incoming = new Map(accounts.map(a => [a.id, a]))
+      const kept = prev
+        .filter(a => incoming.has(a.id))
+        .map(a => incoming.get(a.id)!)
+      const addedIds = new Set(kept.map(a => a.id))
+      const added = accounts.filter(a => !addedIds.has(a.id))
+      return [...kept, ...added]
+    })
+  }, [accounts])
 
   function move(idx: number, direction: -1 | 1) {
     const to = idx + direction
@@ -727,12 +739,13 @@ function EditAccountSheet({
   const linked        = isLinked(account)
   const institution   = account.plaid_institution_name ?? account.teller_institution_name
 
-  const [name,       setName]       = useState(account.name)
-  const [limitValue, setLimitValue] = useState(
+  const [name,             setName]             = useState(account.name)
+  const [limitValue,       setLimitValue]       = useState(
     account.credit_limit_cents ? String(account.credit_limit_cents / 100) : ''
   )
-  const [dueDay,   setDueDay]   = useState(account.due_day ? String(account.due_day) : '')
-  const [deleting, setDeleting] = useState(false)
+  const [dueDay,           setDueDay]           = useState(account.due_day ? String(account.due_day) : '')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -745,90 +758,132 @@ function EditAccountSheet({
     onClose()
   }
 
-  async function handleDelete() {
-    const msg = linked
-      ? `Delete "${account.name}"? This will disconnect its bank link and remove all balance history. Cannot be undone.`
-      : `Delete "${account.name}"? All balance history will be removed. Cannot be undone.`
-    if (!confirm(msg)) return
-    setDeleting(true)
-    await deleteAccount.mutateAsync(account.id)
+  async function handleDisconnect() {
+    await updateAccount.mutateAsync({
+      id:                    account.id,
+      plaid_account_id:      null,
+      plaid_item_id:         null,
+      plaid_institution_name: null,
+      plaid_last_synced_at:  null,
+    })
     onClose()
   }
 
   return (
-    <Sheet onClose={onClose} title="Edit account" maxHeight="90vh">
-      <form onSubmit={submit} className="px-5 flex flex-col gap-4 pb-2">
-        <div>
-          <p className="text-xs font-semibold mb-1" style={{ color: meta.color }}>{meta.label}</p>
-        </div>
-        <div>
-          <label className="text-xs text-muted block mb-1.5">Nickname</label>
-          <input
-            type="text" value={name} onChange={e => setName(e.target.value)}
-            required autoFocus className="field"
-          />
-        </div>
-        {account.type === 'credit_card' && (
-          <>
-            <div>
-              <label className="text-xs text-muted block mb-1.5">Credit limit (optional)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+    <>
+      <Sheet onClose={onClose} title="Edit account" maxHeight="90vh">
+        <form onSubmit={submit} className="px-5 flex flex-col gap-4 pb-2">
+          <div>
+            <p className="text-xs font-semibold mb-1" style={{ color: meta.color }}>{meta.label}</p>
+          </div>
+          <div>
+            <label className="text-xs text-muted block mb-1.5">Nickname</label>
+            <input
+              type="text" value={name} onChange={e => setName(e.target.value)}
+              required autoFocus className="field"
+            />
+          </div>
+          {account.type === 'credit_card' && (
+            <>
+              <div>
+                <label className="text-xs text-muted block mb-1.5">Credit limit (optional)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+                  <input
+                    type="number" inputMode="decimal" step="0.01" min="0"
+                    value={limitValue} onChange={e => setLimitValue(e.target.value)}
+                    placeholder="0.00" className="field pl-7"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted block mb-1.5">Payment due day (optional)</label>
                 <input
-                  type="number" inputMode="decimal" step="0.01" min="0"
-                  value={limitValue} onChange={e => setLimitValue(e.target.value)}
-                  placeholder="0.00" className="field pl-7"
+                  type="number" inputMode="numeric" min="1" max="31"
+                  value={dueDay} onChange={e => setDueDay(e.target.value)}
+                  placeholder="e.g. 15" className="field"
                 />
               </div>
-            </div>
-            <div>
-              <label className="text-xs text-muted block mb-1.5">Payment due day (optional)</label>
-              <input
-                type="number" inputMode="numeric" min="1" max="31"
-                value={dueDay} onChange={e => setDueDay(e.target.value)}
-                placeholder="e.g. 15" className="field"
-              />
-            </div>
-          </>
-        )}
-        <button type="submit" disabled={updateAccount.isPending || !name.trim()} className="btn-primary py-3">
-          {updateAccount.isPending ? 'Saving…' : 'Save changes'}
-        </button>
-      </form>
+            </>
+          )}
+          <button type="submit" disabled={updateAccount.isPending || !name.trim()} className="btn-primary py-3">
+            {updateAccount.isPending ? 'Saving…' : 'Save changes'}
+          </button>
+        </form>
 
-      <div className="px-5 pt-2 pb-2">
-        <div className="card px-4 py-3.5 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-text">Bank sync</p>
-            {linked ? (
-              <p className="text-xs text-success mt-0.5">
-                Connected{institution ? ` · ${institution}` : ''}
-              </p>
-            ) : (
-              <p className="text-xs text-muted mt-0.5">Not linked — tap to connect via Plaid</p>
-            )}
+        <div className="px-5 pt-2 pb-2">
+          <div className="card px-4 py-3.5 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-text">Bank sync</p>
+              {linked ? (
+                <p className="text-xs text-success mt-0.5">
+                  Connected{institution ? ` · ${institution}` : ''}
+                </p>
+              ) : (
+                <p className="text-xs text-muted mt-0.5">Not linked — tap to connect via Plaid</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={onConnectBank}
+                className={linked ? 'btn text-xs' : 'btn-primary text-xs'}
+              >
+                {linked ? 'Reconnect' : 'Connect bank'}
+              </button>
+              {linked && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDisconnect(true)}
+                  className="text-xs text-danger hover:text-danger/80 transition-colors"
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
           </div>
+        </div>
+
+        <div className="px-5 pt-1 pb-5">
           <button
             type="button"
-            onClick={onConnectBank}
-            className={linked ? 'btn text-xs' : 'btn-primary text-xs'}
+            onClick={() => setConfirmingDelete(true)}
+            disabled={deleteAccount.isPending}
+            className="w-full py-3 rounded-lg text-sm font-medium text-danger border border-danger/25 bg-danger/5 hover:bg-danger/10 transition-colors"
           >
-            {linked ? 'Reconnect' : 'Connect bank'}
+            {deleteAccount.isPending ? 'Deleting…' : 'Delete account'}
           </button>
         </div>
-      </div>
+      </Sheet>
 
-      <div className="px-5 pt-1 pb-5">
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={deleting || deleteAccount.isPending}
-          className="w-full py-3 rounded-lg text-sm font-medium text-danger border border-danger/25 bg-danger/5 hover:bg-danger/10 transition-colors"
-        >
-          {deleting || deleteAccount.isPending ? 'Deleting…' : 'Delete account'}
-        </button>
-      </div>
-    </Sheet>
+      {confirmingDelete && (
+        <ConfirmSheet
+          title="Delete account"
+          message={linked
+            ? `Delete "${account.name}"? This will disconnect its bank link and remove all balance history. Cannot be undone.`
+            : `Delete "${account.name}"? All balance history will be removed. Cannot be undone.`
+          }
+          confirmLabel="Delete"
+          destructive
+          onConfirm={async () => {
+            await deleteAccount.mutateAsync(account.id)
+            onClose()
+          }}
+          onClose={() => setConfirmingDelete(false)}
+        />
+      )}
+
+      {confirmDisconnect && (
+        <ConfirmSheet
+          title="Disconnect bank"
+          message={`Disconnect "${account.name}" from ${institution ?? 'your bank'}? The account stays but balance will no longer sync automatically.`}
+          confirmLabel="Disconnect"
+          destructive
+          onConfirm={handleDisconnect}
+          onClose={() => setConfirmDisconnect(false)}
+        />
+      )}
+    </>
   )
 }
 
@@ -852,16 +907,33 @@ function ConnectBankSheet({ account, onClose }: { account: Account; onClose: () 
   async function openPlaid() {
     setLoading(true)
     setError(false)
+    const isReconnect = Boolean(account.plaid_item_id)
     try {
       await loadPlaid()
-      const linkToken = await getLinkToken()
+      // Pass the existing plaid_item_id when reconnecting so Plaid uses update mode
+      // (re-authenticates the existing connection instead of creating a new one)
+      const linkToken = await getLinkToken(account.plaid_item_id ?? undefined)
       const handler = window.Plaid.create({
         token: linkToken,
-        onSuccess: (publicTkn, metadata) => {
-          setPublicToken(publicTkn)
-          setInstitutionName(metadata.institution?.name ?? null)
-          setPlaidAccts(metadata.accounts)
-          if (metadata.accounts.length === 1) setSelectedId(metadata.accounts[0].id)
+        onSuccess: async (publicTkn, metadata) => {
+          if (isReconnect) {
+            // Update mode: exchange token (upserts existing item) and sync — no re-linking needed
+            try {
+              await exchange.mutateAsync({
+                public_token:     publicTkn,
+                institution_name: metadata.institution?.name ?? institutionName,
+              })
+              await plaidSync.mutateAsync()
+            } finally {
+              setLoading(false)
+            }
+            onClose()
+          } else {
+            setPublicToken(publicTkn)
+            setInstitutionName(metadata.institution?.name ?? null)
+            setPlaidAccts(metadata.accounts)
+            if (metadata.accounts.length === 1) setSelectedId(metadata.accounts[0].id)
+          }
         },
         onExit: () => { setLoading(false) },
       })

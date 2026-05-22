@@ -65,17 +65,31 @@ export function Transactions() {
   const plaidSync  = usePlaidSync()
   const addRule    = useAddRule()
 
-  const [editing,     setEditing]     = useState<Transaction | null>(null)
-  const [pendingRule, setPendingRule] = useState<PendingRule | null>(null)
-  const [isSyncing,   setIsSyncing]   = useState(false)
+  const [editing,       setEditing]       = useState<Transaction | null>(null)
+  const [pendingRule,   setPendingRule]   = useState<PendingRule | null>(null)
+  const [isSyncing,     setIsSyncing]     = useState(false)
 
-  const [search,       setSearch]       = useState('')
-  const [bucketFilter, setBucketFilter] = useState<TransactionBucket | 'all'>('all')
-  const [sortMode,     setSortMode]     = useState<SortMode>('date-desc')
-  const [sortOpen,     setSortOpen]     = useState(false)
+  const [search,        setSearch]        = useState('')
+  const [bucketFilter,  setBucketFilter]  = useState<TransactionBucket | 'all'>('all')
+  const [accountFilter, setAccountFilter] = useState<string | 'all'>('all')
+  const [sortMode,      setSortMode]      = useState<SortMode>('date-desc')
+  const [sortOpen,      setSortOpen]      = useState(false)
 
+  const sortRef    = useRef<HTMLDivElement>(null)
   const accountMap = new Map(accounts.map(a => [a.id, a.name]))
   const hasLinked  = accounts.some(a => a.plaid_item_id)
+
+  // Close sort dropdown on outside click
+  useEffect(() => {
+    if (!sortOpen) return
+    function handleOutside(e: MouseEvent) {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setSortOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [sortOpen])
 
   const syncFiredRef = useRef(false)
 
@@ -116,7 +130,12 @@ export function Transactions() {
     return transactions
       .filter(tx => {
         if (bucketFilter !== 'all' && tx.bucket !== bucketFilter) return false
-        if (q && !tx.description.toLowerCase().includes(q)) return false
+        if (accountFilter !== 'all' && tx.account_id !== accountFilter) return false
+        if (q) {
+          const desc     = tx.description.toLowerCase()
+          const merchant = tx.merchant_name?.toLowerCase() ?? ''
+          if (!desc.includes(q) && !merchant.includes(q)) return false
+        }
         return true
       })
       .sort((a, b) => {
@@ -127,13 +146,19 @@ export function Transactions() {
           case 'amount-asc':  return a.amount_cents - b.amount_cents
         }
       })
-  }, [transactions, search, bucketFilter, sortMode])
+  }, [transactions, search, bucketFilter, accountFilter, sortMode])
 
   const grouped = sortMode === 'date-desc' || sortMode === 'date-asc'
     ? groupByDate(filtered)
     : [{ date: '', items: filtered }]
 
   const currentSortLabel = SORT_OPTIONS.find(o => o.value === sortMode)?.label ?? 'Sort'
+
+  // Only show accounts that actually have transactions
+  const accountsWithTx = useMemo(() => {
+    const ids = new Set(transactions.map(t => t.account_id).filter(Boolean) as string[])
+    return accounts.filter(a => ids.has(a.id))
+  }, [accounts, transactions])
 
   function handleBucketChange(tx: Transaction, bucket: TransactionBucket) {
     if (bucket === 'uncategorized') return
@@ -148,6 +173,9 @@ export function Transactions() {
     await applyRulesToTransactions([...rules, { id: '', user_id: '', created_at: '', merchant_pattern: pendingRule.merchantName, bucket: pendingRule.bucket }])
   }
 
+  const showFilters = !isLoading && transactions.length > 0
+  const syncError   = importTx.isError || plaidSync.isError
+
   return (
     <div className="pb-24 lg:pb-8">
       <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border flex items-center justify-between">
@@ -159,7 +187,8 @@ export function Transactions() {
           <button
             onClick={() => importTx.mutate()}
             disabled={importTx.isPending}
-            className="btn-ghost text-xs gap-1.5"
+            className={`btn-ghost text-xs gap-1.5 ${syncError ? 'text-danger' : ''}`}
+            title={syncError ? 'Sync failed — tap to retry' : undefined}
           >
             <svg
               width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -169,12 +198,12 @@ export function Transactions() {
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
-            {importTx.isPending ? 'Syncing…' : 'Sync'}
+            {importTx.isPending ? 'Syncing…' : syncError ? 'Sync failed' : 'Sync'}
           </button>
         )}
       </div>
 
-      {!isLoading && transactions.length > 0 && (
+      {showFilters && (
         <div className="px-4 lg:px-6 pt-3 pb-2 flex flex-col gap-2.5">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -193,7 +222,7 @@ export function Transactions() {
                 className="field pl-8 text-sm h-9"
               />
             </div>
-            <div className="relative">
+            <div className="relative" ref={sortRef}>
               <button
                 onClick={() => setSortOpen(o => !o)}
                 className="btn-ghost text-xs gap-1 h-9 px-2.5 whitespace-nowrap"
@@ -221,6 +250,7 @@ export function Transactions() {
             </div>
           </div>
 
+          {/* Bucket filter chips */}
           <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {BUCKET_FILTERS.map(f => {
               const isActive = bucketFilter === f.value
@@ -245,6 +275,40 @@ export function Transactions() {
               )
             })}
           </div>
+
+          {/* Account filter chips — only shown when there are multiple accounts with transactions */}
+          {accountsWithTx.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+              <button
+                onClick={() => setAccountFilter('all')}
+                className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                  accountFilter === 'all'
+                    ? 'bg-elev/60 border-border/80 text-text'
+                    : 'border-border text-muted hover:text-text'
+                }`}
+              >
+                All accounts
+              </button>
+              {accountsWithTx.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => setAccountFilter(a.id)}
+                  className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                    accountFilter === a.id
+                      ? 'bg-elev/60 border-accent/60 text-accent'
+                      : 'border-border text-muted hover:text-text'
+                  }`}
+                >
+                  {a.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Show truncation notice when at the fetch limit */}
+          {transactions.length === 2000 && (
+            <p className="text-xs text-muted">Showing the 2,000 most recent transactions.</p>
+          )}
         </div>
       )}
 
@@ -264,7 +328,7 @@ export function Transactions() {
           </div>
           <p className="text-base font-display font-semibold text-text mb-1">No transactions yet</p>
           {hasLinked ? (
-            <p className="text-sm text-muted">Tap Import to pull the last 30 days from your linked accounts.</p>
+            <p className="text-sm text-muted">Tap Sync to pull the last 30 days from your linked accounts.</p>
           ) : (
             <p className="text-sm text-muted">Connect a bank account in Accounts to start syncing transactions.</p>
           )}
@@ -275,11 +339,19 @@ export function Transactions() {
           <p className="text-sm text-muted">Try a different search or filter.</p>
         </div>
       ) : (
-        <div className="pb-4" onClick={() => sortOpen && setSortOpen(false)}>
+        <div className="pb-4">
           {importTx.data && (
             <div className="mx-4 lg:mx-6 mt-4 px-4 py-2.5 bg-success/10 rounded-lg border border-success/20">
               <p className="text-sm text-success font-medium">
                 Imported {importTx.data.imported} new transaction{importTx.data.imported !== 1 ? 's' : ''}
+              </p>
+            </div>
+          )}
+
+          {syncError && (
+            <div className="mx-4 lg:mx-6 mt-4 px-4 py-2.5 bg-danger/10 rounded-lg border border-danger/20">
+              <p className="text-sm text-danger font-medium">
+                Sync failed — check your bank connection and try again.
               </p>
             </div>
           )}
@@ -317,7 +389,7 @@ export function Transactions() {
                       }`}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-text truncate">{tx.description}</p>
+                        <p className="text-sm text-text truncate">{tx.merchant_name || tx.description}</p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span
                             className="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
@@ -382,7 +454,7 @@ function EditTransactionSheet({
   }
 
   return (
-    <Sheet onClose={onClose} title={transaction.description} maxHeight="70vh">
+    <Sheet onClose={onClose} title={transaction.merchant_name || transaction.description} maxHeight="70vh">
       <form onSubmit={submit} className="px-5 pb-5 flex flex-col gap-4">
         <div>
           <p className="section-label mb-2.5">Category</p>

@@ -12,8 +12,11 @@ async function invokeEdgeFn<T>(name: string, body: Record<string, unknown>): Pro
 }
 
 export function usePlaidLinkTokenImperative() {
-  return useCallback(async (): Promise<string> => {
-    const result = await invokeEdgeFn<{ link_token: string }>('plaid-link-token', {})
+  return useCallback(async (plaidItemDbId?: string): Promise<string> => {
+    const result = await invokeEdgeFn<{ link_token: string }>(
+      'plaid-link-token',
+      plaidItemDbId ? { plaid_item_db_id: plaidItemDbId } : {}
+    )
     return result.link_token
   }, [])
 }

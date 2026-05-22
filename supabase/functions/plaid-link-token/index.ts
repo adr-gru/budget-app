@@ -22,7 +22,29 @@ Deno.serve(async (req: Request) => {
     )
     if (authError || !user) return json({ error: 'Unauthorized' }, 401)
 
+    // Optional: if plaid_item_db_id is provided, create an update-mode link token
+    // so the user re-authenticates their existing connection instead of creating a new one.
+    const body = await req.json().catch(() => ({})) as { plaid_item_db_id?: string }
+    let access_token: string | undefined
+    if (body.plaid_item_db_id) {
+      const adminClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      )
+      const { data: item } = await adminClient
+        .from('plaid_items')
+        .select('plaid_access_token')
+        .eq('id', body.plaid_item_db_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      access_token = (item as any)?.plaid_access_token ?? undefined
+    }
+
     const plaidEnv = Deno.env.get('PLAID_ENV') ?? 'development'
+    const linkPayload = access_token
+      ? { user: { client_user_id: user.id }, client_name: 'Budget', access_token }
+      : { user: { client_user_id: user.id }, client_name: 'Budget', products: ['transactions'], country_codes: ['US'], language: 'en' }
+
     const resp = await fetch(`https://${plaidEnv}.plaid.com/link/token/create`, {
       method: 'POST',
       headers: {
@@ -30,13 +52,7 @@ Deno.serve(async (req: Request) => {
         'PLAID-CLIENT-ID': Deno.env.get('PLAID_CLIENT_ID')!,
         'PLAID-SECRET': Deno.env.get('PLAID_SECRET')!,
       },
-      body: JSON.stringify({
-        user: { client_user_id: user.id },
-        client_name: 'Budget',
-        products: ['transactions'],
-        country_codes: ['US'],
-        language: 'en',
-      }),
+      body: JSON.stringify(linkPayload),
     })
 
     const data: any = await resp.json()

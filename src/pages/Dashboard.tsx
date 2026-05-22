@@ -150,6 +150,17 @@ export function Dashboard() {
   const bucketActuals = txBuckets ?? subscriptionActuals
   const usingTransactions = Boolean(txBuckets)
 
+  const cycleStartStr = format(cycleStart, 'yyyy-MM-dd')
+  const cycleEndStr   = format(cycleEnd_, 'yyyy-MM-dd')
+  const uncategorizedCount = usingTransactions
+    ? allTransactions.filter(tx =>
+        !tx.is_income &&
+        tx.bucket === 'uncategorized' &&
+        tx.date >= cycleStartStr &&
+        tx.date <= cycleEndStr
+      ).length
+    : 0
+
   const netCreditDelta = accounts
     .filter(a => a.type === 'credit_card')
     .reduce((sum, a) => sum + (activityMap.get(a.id)?.delta ?? 0), 0)
@@ -343,13 +354,23 @@ export function Dashboard() {
               ? 'Actuals from synced transactions this pay period.'
               : 'Actuals reflect subscriptions due this pay period.'}
           </p>
+          {usingTransactions && uncategorizedCount > 0 && (
+            <button
+              onClick={() => navigate('/transactions')}
+              className="mt-2 flex items-center gap-1.5 text-xs text-warning font-medium hover:text-warning/80 transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              {uncategorizedCount} uncategorized transaction{uncategorizedCount !== 1 ? 's' : ''} this cycle →
+            </button>
+          )}
         </div>
       )}
 
       {/* Top spending this cycle */}
       {(() => {
-        const cycleStartStr = format(cycleStart, 'yyyy-MM-dd')
-        const cycleEndStr   = format(cycleEnd_, 'yyyy-MM-dd')
         const topTx = allTransactions
           .filter(tx => !tx.is_income && tx.amount_cents > 0 && tx.date >= cycleStartStr && tx.date <= cycleEndStr)
           .sort((a, b) => b.amount_cents - a.amount_cents)

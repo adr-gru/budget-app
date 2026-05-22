@@ -5,6 +5,7 @@ import { useAccounts } from '../data/accounts'
 import { useLatestBalances } from '../data/snapshots'
 import { useGoalContributions, useDeleteContribution } from '../data/contributions'
 import { ContributionSheet } from '../components/ContributionSheet'
+import { ConfirmSheet } from '../components/ConfirmSheet'
 import { Sheet } from '../components/Sheet'
 import { Skeleton } from '../components/Skeleton'
 import { formatMoney, parseCents, formatDollars } from '../lib/money'
@@ -41,12 +42,11 @@ function ContributionLog({
 }) {
   const { data: contributions = [], isLoading } = useGoalContributions(goalId)
   const deleteContribution = useDeleteContribution()
-  const [showAdd, setShowAdd] = useState(false)
+  const [showAdd,        setShowAdd]        = useState(false)
+  const [showAll,        setShowAll]        = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  async function handleDelete(id: string) {
-    if (!confirm('Remove this contribution?')) return
-    await deleteContribution.mutateAsync({ id, goalId })
-  }
+  const visible = showAll ? contributions : contributions.slice(0, 6)
 
   return (
     <div className="mt-3 pt-3 border-t border-border">
@@ -64,40 +64,48 @@ function ContributionLog({
       ) : contributions.length === 0 ? (
         <p className="text-xs text-muted">No contributions yet.</p>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          {contributions.slice(0, 6).map(c => (
-            <div key={c.id} className="flex items-center justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <span className="text-xs text-subtle font-mono tabular-nums">
-                  {format(parseISO(c.occurred_on), 'MMM d, yyyy')}
-                </span>
-                {c.note && (
-                  <span className="text-xs text-muted ml-1.5 truncate">· {c.note}</span>
-                )}
-                {c.source === 'auto' && (
-                  <span className="text-[10px] text-muted ml-1.5">auto</span>
-                )}
+        <>
+          <div className="flex flex-col gap-1.5">
+            {visible.map(c => (
+              <div key={c.id} className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-subtle font-mono tabular-nums">
+                    {format(parseISO(c.occurred_on), 'MMM d, yyyy')}
+                  </span>
+                  {c.note && (
+                    <span className="text-xs text-muted ml-1.5 truncate">· {c.note}</span>
+                  )}
+                  {c.source === 'auto' && (
+                    <span className="text-[10px] text-muted ml-1.5">auto</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="font-mono text-xs font-semibold text-success tabular-nums">
+                    +{formatMoney(c.amount_cents)}
+                  </span>
+                  <button
+                    onClick={() => setConfirmDeleteId(c.id)}
+                    className="text-muted/60 hover:text-danger transition-colors p-0.5"
+                    aria-label="Remove contribution"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <span className="font-mono text-xs font-semibold text-success tabular-nums">
-                  +{formatMoney(c.amount_cents)}
-                </span>
-                <button
-                  onClick={() => handleDelete(c.id)}
-                  className="text-muted/60 hover:text-danger transition-colors p-0.5"
-                  aria-label="Remove contribution"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+
           {contributions.length > 6 && (
-            <p className="text-xs text-muted mt-0.5">{contributions.length - 6} more not shown</p>
+            <button
+              onClick={() => setShowAll(v => !v)}
+              className="mt-1.5 text-xs text-accent font-medium hover:text-accent/80 transition-colors"
+            >
+              {showAll ? 'Show less' : `Show ${contributions.length - 6} more`}
+            </button>
           )}
-        </div>
+        </>
       )}
 
       {showAdd && (
@@ -105,6 +113,20 @@ function ContributionLog({
           goalId={goalId}
           goalName={goalName}
           onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmSheet
+          title="Remove contribution"
+          message="This contribution will be removed from the history."
+          confirmLabel="Remove"
+          destructive
+          onConfirm={async () => {
+            await deleteContribution.mutateAsync({ id: confirmDeleteId, goalId })
+            setConfirmDeleteId(null)
+          }}
+          onClose={() => setConfirmDeleteId(null)}
         />
       )}
     </div>
@@ -153,11 +175,16 @@ function GoalCard({
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {goal.target_date && !over && (
               <p className="text-xs text-muted">
-                {monthsLeft !== null && monthsLeft >= 0
+                {monthsLeft !== null && monthsLeft > 0
                   ? `${monthsLeft} month${monthsLeft !== 1 ? 's' : ''} · ${format(parseISO(goal.target_date), 'MMM yyyy')}`
+                  : monthsLeft === 0
+                  ? `< 1 month · ${format(parseISO(goal.target_date), 'MMM d')}`
                   : `Target: ${format(parseISO(goal.target_date), 'MMM yyyy')}`
                 }
               </p>
+            )}
+            {!goal.target_date && !over && (
+              <p className="text-xs text-muted">No deadline — add a target date for pace tracking</p>
             )}
             {pace && !over && (
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ color: pace.color, background: pace.color + '18' }}>
@@ -237,19 +264,15 @@ export function Goals() {
   const { data: latestBalances = [] }   = useLatestBalances()
   const deleteGoal = useDeleteGoal()
 
-  const [showAdd,    setShowAdd]    = useState(false)
-  const [editTarget, setEditTarget] = useState<Goal | null>(null)
+  const [showAdd,           setShowAdd]           = useState(false)
+  const [editTarget,        setEditTarget]         = useState<Goal | null>(null)
+  const [confirmDeleteGoalId, setConfirmDeleteGoalId] = useState<string | null>(null)
 
   const balanceMap = new Map(latestBalances.map(s => [s.account_id, s.balance_cents]))
 
   function currentCentsFor(goal: Goal): number {
     if (goal.linked_account_id) return balanceMap.get(goal.linked_account_id) ?? 0
     return goal.current_cents
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this goal?')) return
-    await deleteGoal.mutateAsync(id)
   }
 
   return (
@@ -294,7 +317,7 @@ export function Goals() {
                     goal={goal}
                     currentCents={currentCentsFor(goal)}
                     onEdit={() => setEditTarget(goal)}
-                    onDelete={() => handleDelete(goal.id)}
+                    onDelete={() => setConfirmDeleteGoalId(goal.id)}
                   />
                 </div>
               )
@@ -311,6 +334,20 @@ export function Goals() {
           accounts={accounts}
           balanceMap={balanceMap}
           onClose={() => setEditTarget(null)}
+        />
+      )}
+
+      {confirmDeleteGoalId && (
+        <ConfirmSheet
+          title="Delete goal"
+          message="This goal and its contribution history will be permanently removed."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={async () => {
+            await deleteGoal.mutateAsync(confirmDeleteGoalId)
+            setConfirmDeleteGoalId(null)
+          }}
+          onClose={() => setConfirmDeleteGoalId(null)}
         />
       )}
     </div>

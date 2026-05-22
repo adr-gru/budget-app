@@ -11,7 +11,7 @@ export function useTransactions() {
         .select('*')
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
-        .limit(500)
+        .limit(2000)
       if (error) throw error
       return data as Transaction[]
     }
@@ -25,6 +25,7 @@ export function useCycleTransactionBuckets(cycleStart: string, cycleEnd: string)
       const { data, error } = await supabase
         .from('transactions')
         .select('bucket, amount_cents')
+        .eq('is_income', false)
         .gte('date', cycleStart)
         .lte('date', cycleEnd)
       if (error) throw error

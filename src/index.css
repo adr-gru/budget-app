@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body {
+  background-color: var(--color-bg);
+}
+
 :root {
   --color-bg:      #F9FAFB;
   --color-surface: #FFFFFF;

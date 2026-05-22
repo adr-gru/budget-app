@@ -4,25 +4,17 @@ import { supabase } from '../lib/supabase'
 import type { AccountType, BalanceSnapshot } from '../lib/supabase'
 import { cycleEnd } from '../lib/cycle'
 
-// Latest balance per account: fetch all snapshots ordered desc, dedupe by account_id
+// Latest balance per account via DB view (migration 008).
+// The view uses DISTINCT ON so only one row per account is returned.
 export function useLatestBalances() {
   return useQuery({
     queryKey: ['snapshots', 'latest'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('account_balance_snapshots')
+        .from('latest_account_balances')
         .select('*')
-        .order('recorded_at', { ascending: false })
       if (error) throw error
-      const seen = new Set<string>()
-      const latest: BalanceSnapshot[] = []
-      for (const row of (data as BalanceSnapshot[])) {
-        if (!seen.has(row.account_id)) {
-          seen.add(row.account_id)
-          latest.push(row)
-        }
-      }
-      return latest
+      return data as BalanceSnapshot[]
     }
   })
 }
