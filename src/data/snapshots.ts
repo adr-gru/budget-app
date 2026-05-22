@@ -4,25 +4,18 @@ import { supabase } from '../lib/supabase'
 import type { AccountType, BalanceSnapshot } from '../lib/supabase'
 import { cycleEnd } from '../lib/cycle'
 
-// Latest balance per account — fetches all snapshots ordered by date desc,
-// then keeps only the first (latest) row per account.
-// Once migration 008 has been run in Supabase, swap this to query
-// the `latest_account_balances` view instead.
+// Latest balance per account via DB view (migration 008).
+// The view uses DISTINCT ON so only one row per account is returned,
+// with security_invoker = on so RLS from the base table still applies.
 export function useLatestBalances() {
   return useQuery({
     queryKey: ['snapshots', 'latest'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('account_balance_snapshots')
+        .from('latest_account_balances')
         .select('*')
-        .order('recorded_at', { ascending: false })
       if (error) throw error
-      const seen = new Set<string>()
-      return (data as BalanceSnapshot[]).filter(s => {
-        if (seen.has(s.account_id)) return false
-        seen.add(s.account_id)
-        return true
-      })
+      return data as BalanceSnapshot[]
     }
   })
 }
