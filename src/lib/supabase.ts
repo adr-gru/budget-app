@@ -152,3 +152,25 @@ export interface DeviceToken {
   platform:   DevicePlatform
   created_at: string
 }
+
+export interface EmailDigestSections {
+  balances:      boolean
+  subscriptions: boolean
+  budget:        boolean
+  goals:         boolean
+  credit_cards:  boolean
+}
+
+export interface EmailDigestSettings {
+  user_id:      string
+  enabled:      boolean
+  frequency:    'daily' | 'weekly' | 'monthly'
+  send_day:     number | null
+  send_hour:    number
+  recipients:   string[]
+  detail_level: 'summary' | 'detailed'
+  sections:     EmailDigestSections
+  last_sent_at: string | null
+  created_at:   string
+  updated_at:   string
+}

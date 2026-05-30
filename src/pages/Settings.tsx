@@ -4,6 +4,7 @@ import { useAccounts } from '../data/accounts'
 import { useSubscriptions } from '../data/subscriptions'
 import { useGoals } from '../data/goals'
 import { usePasskeyCredentials, useDeletePasskey } from '../data/passkeys'
+import { useEmailDigestSettings, useUpsertEmailDigestSettings } from '../data/emailDigest'
 import { parseCents, formatDollars, formatMoney } from '../lib/money'
 import { useAuth } from '../auth/AuthProvider'
 import { todayISO, currentCycleStart, cycleEnd, cycleLabel } from '../lib/cycle'
@@ -11,7 +12,7 @@ import { exportAccounts, exportSubscriptions, exportGoals, exportSnapshots, expo
 import { isNative } from '../lib/native'
 import { usePasskey, passkeySupported } from '../hooks/usePasskey'
 import { format, parseISO, addDays } from 'date-fns'
-import type { BalanceSnapshot, GoalContribution } from '../lib/supabase'
+import type { BalanceSnapshot, GoalContribution, EmailDigestSections } from '../lib/supabase'
 import { getTheme, setTheme, type Theme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 
@@ -247,6 +248,280 @@ function WebSettings() {
   )
 }
 
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function localHourToUtc(localH: number): number {
+  const d = new Date()
+  d.setHours(localH, 0, 0, 0)
+  return d.getUTCHours()
+}
+
+function utcHourToLocal(utcH: number): number {
+  const d   = new Date()
+  const utc = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), utcH)
+  return new Date(utc).getHours()
+}
+
+function formatLocalHour(localH: number): string {
+  const d = new Date()
+  d.setHours(localH, 0, 0, 0)
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+const DEFAULT_SECTIONS: EmailDigestSections = {
+  balances: true, subscriptions: true, budget: true, goals: true, credit_cards: true
+}
+
+function EmailDigestSection() {
+  const { data: settings } = useEmailDigestSettings()
+  const upsert = useUpsertEmailDigestSettings()
+  const [saved,       setSaved]       = useState(false)
+  const [enabled,     setEnabled]     = useState(false)
+  const [frequency,   setFrequency]   = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const [sendDay,     setSendDay]     = useState<number | null>(1)
+  const [sendHour,    setSendHour]    = useState(8)
+  const [recipients,  setRecipients]  = useState<string[]>([])
+  const [detailLevel, setDetailLevel] = useState<'summary' | 'detailed'>('summary')
+  const [sections,    setSections]    = useState<EmailDigestSections>(DEFAULT_SECTIONS)
+  const [emailInput,  setEmailInput]  = useState('')
+  const [emailError,  setEmailError]  = useState<string | null>(null)
+  const initialized = useRef(false)
+
+  useEffect(() => {
+    if (!settings || initialized.current) return
+    initialized.current = true
+    setEnabled(settings.enabled)
+    setFrequency(settings.frequency)
+    setSendDay(settings.send_day)
+    setSendHour(settings.send_hour)
+    setRecipients(settings.recipients)
+    setDetailLevel(settings.detail_level)
+    setSections(settings.sections)
+  }, [settings])
+
+  async function persist(updates: Parameters<typeof upsert.mutateAsync>[0]) {
+    await upsert.mutateAsync(updates)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1500)
+  }
+
+  function addRecipient() {
+    const email = emailInput.trim().toLowerCase()
+    if (!email) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Enter a valid email address')
+      return
+    }
+    if (recipients.includes(email)) {
+      setEmailError('Already added')
+      return
+    }
+    const next = [...recipients, email]
+    setRecipients(next)
+    setEmailInput('')
+    setEmailError(null)
+    persist({ recipients: next })
+  }
+
+  function removeRecipient(email: string) {
+    const next = recipients.filter(r => r !== email)
+    setRecipients(next)
+    persist({ recipients: next })
+  }
+
+  const hourOptions = Array.from({ length: 24 }, (_, i) => ({ localH: i, label: formatLocalHour(i) }))
+  const currentLocalHour = utcHourToLocal(sendHour)
+
+  const lastSentText = settings?.last_sent_at
+    ? `Last sent ${format(parseISO(settings.last_sent_at), 'EEE MMM d, h:mm a')}`
+    : null
+
+  return (
+    <div className="px-4 lg:px-6 pt-6">
+      <div className="flex items-center justify-between mb-3">
+        <p className="section-label">Email digest</p>
+        {saved && <span className="text-xs text-success font-medium">Saved</span>}
+      </div>
+      <div className="card px-4 py-0">
+        {/* Enable toggle */}
+        <div className="flex items-center justify-between py-3.5 border-b border-border">
+          <div>
+            <p className="text-sm text-text">Email digest</p>
+            <p className="text-xs text-muted mt-0.5">Receive a scheduled finance summary by email</p>
+          </div>
+          <Toggle
+            checked={enabled}
+            onChange={v => { setEnabled(v); persist({ enabled: v }) }}
+          />
+        </div>
+
+        {enabled && (
+          <>
+            {/* Recipients */}
+            <div className="py-3.5 border-b border-border">
+              <p className="text-sm text-text mb-2">Recipients</p>
+              {recipients.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {recipients.map(r => (
+                    <span key={r} className="inline-flex items-center gap-1 bg-elev text-xs text-text px-2.5 py-1 rounded-md">
+                      {r}
+                      <button
+                        onClick={() => removeRecipient(r)}
+                        className="text-muted hover:text-danger transition-colors leading-none ml-0.5"
+                        aria-label={`Remove ${r}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={e => { setEmailInput(e.target.value); setEmailError(null) }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRecipient() } }}
+                  placeholder="email@example.com"
+                  className="field flex-1 text-sm"
+                />
+                <button
+                  onClick={addRecipient}
+                  className="btn-primary px-3 py-2 text-sm flex-shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+              {emailError && <p className="text-xs text-danger mt-1.5">{emailError}</p>}
+            </div>
+
+            {/* Frequency */}
+            <div className="flex items-center justify-between py-3.5 border-b border-border">
+              <p className="text-sm text-text">Frequency</p>
+              <div className="flex rounded-md border border-border overflow-hidden">
+                {(['daily', 'weekly', 'monthly'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => {
+                      const newDay = f === 'daily' ? null : 1
+                      setFrequency(f)
+                      setSendDay(newDay)
+                      persist({ frequency: f, send_day: newDay })
+                    }}
+                    className={`px-3 py-1.5 text-sm capitalize transition-colors ${
+                      frequency === f
+                        ? 'bg-elev text-text font-medium'
+                        : 'text-muted hover:text-text'
+                    }`}
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Day picker */}
+            {frequency !== 'daily' && (
+              <div className="flex items-center justify-between py-3.5 border-b border-border">
+                <p className="text-sm text-text">{frequency === 'weekly' ? 'Day of week' : 'Day of month'}</p>
+                <select
+                  value={sendDay ?? 1}
+                  onChange={e => {
+                    const day = Number(e.target.value)
+                    setSendDay(day)
+                    persist({ send_day: day })
+                  }}
+                  className="field text-sm w-auto"
+                >
+                  {frequency === 'weekly'
+                    ? DAYS_OF_WEEK.map((d, i) => <option key={i} value={i}>{d}</option>)
+                    : Array.from({ length: 31 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>{i + 1}</option>
+                      ))
+                  }
+                </select>
+              </div>
+            )}
+
+            {/* Time */}
+            <div className="flex items-center justify-between py-3.5 border-b border-border">
+              <p className="text-sm text-text">Send time</p>
+              <select
+                value={currentLocalHour}
+                onChange={e => {
+                  const utcH = localHourToUtc(Number(e.target.value))
+                  setSendHour(utcH)
+                  persist({ send_hour: utcH })
+                }}
+                className="field text-sm w-auto"
+              >
+                {hourOptions.map(({ localH, label }) => (
+                  <option key={localH} value={localH}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Detail level */}
+            <div className="flex items-center justify-between py-3.5 border-b border-border">
+              <p className="text-sm text-text">Detail level</p>
+              <div className="flex rounded-md border border-border overflow-hidden">
+                {(['summary', 'detailed'] as const).map(d => (
+                  <button
+                    key={d}
+                    onClick={() => { setDetailLevel(d); persist({ detail_level: d }) }}
+                    className={`px-3 py-1.5 text-sm capitalize transition-colors ${
+                      detailLevel === d
+                        ? 'bg-elev text-text font-medium'
+                        : 'text-muted hover:text-text'
+                    }`}
+                  >
+                    {d.charAt(0).toUpperCase() + d.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sections — only when detailed */}
+            {detailLevel === 'detailed' && (
+              <div className="py-3.5 border-b border-border">
+                <p className="text-sm text-text mb-2.5">Sections</p>
+                {([
+                  { key: 'balances'      as const, label: 'Account balances'       },
+                  { key: 'subscriptions' as const, label: 'Upcoming subscriptions' },
+                  { key: 'budget'        as const, label: 'Budget summary'         },
+                  { key: 'goals'         as const, label: 'Goals progress'         },
+                  { key: 'credit_cards'  as const, label: 'Credit card due dates'  },
+                ]).map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2.5 py-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sections[key]}
+                      onChange={e => {
+                        const next = { ...sections, [key]: e.target.checked }
+                        setSections(next)
+                        persist({ sections: next })
+                      }}
+                      className="w-4 h-4 rounded accent-accent"
+                    />
+                    <span className="text-sm text-text">{label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {/* Last sent */}
+            {lastSentText && (
+              <div className="py-3">
+                <p className="text-xs text-muted">{lastSentText}</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function Settings() {
   const { session, signOut } = useAuth()
   const { data: profile } = useProfile()
@@ -438,6 +713,9 @@ export function Settings() {
 
       {/* Web passkeys */}
       {!isNative && passkeySupported && <WebSettings />}
+
+      {/* Email digest */}
+      <EmailDigestSection />
 
       {/* Appearance */}
       <div className="px-4 lg:px-6 pt-6">
