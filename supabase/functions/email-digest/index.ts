@@ -362,6 +362,8 @@ async function buildHtml(userId: string, row: DigestRow, now: Date): Promise<str
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
+  const url             = new URL(req.url)
+  const force           = url.searchParams.get('force') === 'true'
   const now             = new Date()
   const nowUtcHour      = now.getUTCHours()
   const nowUtcDayOfWeek = now.getUTCDay()
@@ -381,13 +383,15 @@ Deno.serve(async (req) => {
 
   const qualifying = (allSettings ?? []).filter((s: DigestRow) => {
     if (!s.recipients?.length) return false
-    if (s.send_hour !== nowUtcHour) return false
-    if (s.frequency === 'weekly'  && s.send_day !== null && s.send_day !== nowUtcDayOfWeek) return false
-    if (s.frequency === 'monthly' && s.send_day !== null && s.send_day !== nowUtcDayOfMon)  return false
-    if (s.last_sent_at) {
-      const elapsed    = (now.getTime() - new Date(s.last_sent_at).getTime()) / 3600000
-      const minElapsed = s.frequency === 'daily' ? 20 : s.frequency === 'weekly' ? 144 : 660
-      if (elapsed < minElapsed) return false
+    if (!force) {
+      if (s.send_hour !== nowUtcHour) return false
+      if (s.frequency === 'weekly'  && s.send_day !== null && s.send_day !== nowUtcDayOfWeek) return false
+      if (s.frequency === 'monthly' && s.send_day !== null && s.send_day !== nowUtcDayOfMon)  return false
+      if (s.last_sent_at) {
+        const elapsed    = (now.getTime() - new Date(s.last_sent_at).getTime()) / 3600000
+        const minElapsed = s.frequency === 'daily' ? 20 : s.frequency === 'weekly' ? 144 : 660
+        if (elapsed < minElapsed) return false
+      }
     }
     return true
   })
@@ -411,10 +415,12 @@ Deno.serve(async (req) => {
         if (res.ok) sent++
       }
 
-      await admin
-        .from('email_digest_settings')
-        .update({ last_sent_at: now.toISOString(), updated_at: now.toISOString() })
-        .eq('user_id', row.user_id)
+      if (!force) {
+        await admin
+          .from('email_digest_settings')
+          .update({ last_sent_at: now.toISOString(), updated_at: now.toISOString() })
+          .eq('user_id', row.user_id)
+      }
     } catch (err) {
       console.error(`Failed digest for user ${row.user_id}:`, err)
     }
