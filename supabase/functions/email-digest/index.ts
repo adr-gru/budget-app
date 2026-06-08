@@ -362,9 +362,11 @@ async function buildHtml(userId: string, row: DigestRow, now: Date): Promise<str
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
-  const url             = new URL(req.url)
-  const force           = url.searchParams.get('force') === 'true'
-  const now             = new Date()
+  const url        = new URL(req.url)
+  let bodyForce    = false
+  try { const b = await req.json(); bodyForce = b?.force === true } catch { /* no body */ }
+  const force      = url.searchParams.get('force') === 'true' || bodyForce
+  const now        = new Date()
   const nowUtcHour      = now.getUTCHours()
   const nowUtcDayOfWeek = now.getUTCDay()
   const nowUtcDayOfMon  = now.getUTCDate()

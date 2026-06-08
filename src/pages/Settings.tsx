@@ -296,10 +296,12 @@ function EmailDigestSection() {
     setTestSending(true)
     setTestStatus(null)
     try {
-      const { error } = await supabase.functions.invoke('email-digest?force=true', { body: {} })
+      const { error } = await supabase.functions.invoke('email-digest', { body: { force: true } })
       setTestStatus(error ? 'error' : 'sent')
-    } catch {
+      if (error) console.error('Email digest test failed:', error)
+    } catch (err) {
       setTestStatus('error')
+      console.error('Email digest test exception:', err)
     } finally {
       setTestSending(false)
       setTimeout(() => setTestStatus(null), 4000)
