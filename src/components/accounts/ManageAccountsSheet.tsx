@@ -67,11 +67,8 @@ export function ManageAccountsSheet({
               {plaidItems.map(item => {
                 const linkedAccounts = accounts.filter(a => a.plaid_item_id === item.id)
                 const linkedCount    = linkedAccounts.length
-                const lastSynced     = linkedAccounts
-                  .map(a => a.plaid_last_synced_at)
-                  .filter(Boolean)
-                  .sort()
-                  .at(-1)
+                const syncTimes  = linkedAccounts.map(a => a.plaid_last_synced_at).filter(Boolean).sort()
+                const lastSynced = syncTimes[syncTimes.length - 1] ?? null
                 const firstLinked    = linkedAccounts[0] ?? null
                 return (
                   <div key={item.id} className="card px-4 py-3 flex items-center gap-3">
