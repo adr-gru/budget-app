@@ -84,6 +84,14 @@ export function useArchiveAccount() {
   })
 }
 
+export function getLastSyncedAt(accounts: Account[]): string | null {
+  const dates = accounts
+    .filter(a => a.plaid_item_id && a.plaid_last_synced_at)
+    .map(a => a.plaid_last_synced_at as string)
+  if (dates.length === 0) return null
+  return dates.reduce((a, b) => (a > b ? a : b))
+}
+
 export function useDeleteAccount() {
   const qc = useQueryClient()
   return useMutation({

@@ -21,7 +21,7 @@ const CADENCE_OPTIONS: { value: SubCadence; label: string }[] = [
 ]
 
 export function Subscriptions() {
-  const { data: subs = [], isLoading } = useSubscriptions()
+  const { data: subs = [], isLoading, isError } = useSubscriptions()
   const updateSub   = useUpdateSubscription()
   const suggestions = useSuggestedSubscriptions()
   const addSub      = useAddSubscription()
@@ -91,6 +91,11 @@ export function Subscriptions() {
       {isLoading ? (
         <div className="px-4 lg:px-6 pt-5 flex flex-col gap-3">
           {[0,1,2,3].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}
+        </div>
+      ) : isError ? (
+        <div className="px-4 lg:px-6 pt-8 flex flex-col items-center text-center">
+          <p className="text-sm text-danger font-medium mb-1">Failed to load subscriptions</p>
+          <p className="text-xs text-muted">Check your connection and reload the page.</p>
         </div>
       ) : (
         <>

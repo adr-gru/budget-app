@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { format, parseISO, isToday, isYesterday, differenceInHours } from 'date-fns'
+import { format, parseISO, isToday, isYesterday, formatDistanceToNowStrict } from 'date-fns'
 import { useTransactions, useUpdateTransaction } from '../data/transactions'
 import { usePlaidImportTransactions, usePlaidSync } from '../data/plaid'
 import { useAccounts } from '../data/accounts'
 import { useTransactionRules, useAddRule, applyRulesToTransactions } from '../data/transactionRules'
+import { getLastSyncedAt } from '../data/accounts'
 import { Sheet } from '../components/Sheet'
 import { Skeleton } from '../components/Skeleton'
 import { formatMoney } from '../lib/money'
@@ -67,7 +68,6 @@ export function Transactions() {
 
   const [editing,       setEditing]       = useState<Transaction | null>(null)
   const [pendingRule,   setPendingRule]   = useState<PendingRule | null>(null)
-  const [isSyncing,     setIsSyncing]     = useState(false)
 
   const [search,        setSearch]        = useState('')
   const [bucketFilter,  setBucketFilter]  = useState<TransactionBucket | 'all'>('all')
@@ -90,34 +90,6 @@ export function Transactions() {
     document.addEventListener('mousedown', handleOutside)
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [sortOpen])
-
-  const syncFiredRef = useRef(false)
-
-  useEffect(() => {
-    if (syncFiredRef.current) return
-    if (accounts.length === 0) return
-    if (!hasLinked) return
-
-    syncFiredRef.current = true
-
-    const linkedAccounts = accounts.filter(a => a.plaid_item_id)
-    const syncDates = linkedAccounts
-      .map(a => a.plaid_last_synced_at)
-      .filter((d): d is string => d !== null)
-
-    const isStale = syncDates.length === 0 || (() => {
-      const mostRecent = syncDates.reduce((a, b) => (a > b ? a : b))
-      return differenceInHours(new Date(), parseISO(mostRecent)) > 4
-    })()
-
-    if (!isStale) return
-
-    setIsSyncing(true)
-    Promise.all([
-      importTx.mutateAsync(),
-      plaidSync.mutateAsync(),
-    ]).finally(() => setIsSyncing(false))
-  }, [accounts, hasLinked])
 
   useEffect(() => {
     if (!pendingRule) return
@@ -173,32 +145,38 @@ export function Transactions() {
     await applyRulesToTransactions([...rules, { id: '', user_id: '', created_at: '', merchant_pattern: pendingRule.merchantName, bucket: pendingRule.bucket }])
   }
 
-  const showFilters = !isLoading && transactions.length > 0
-  const syncError   = importTx.isError || plaidSync.isError
+  const showFilters    = !isLoading && transactions.length > 0
+  const syncError      = importTx.isError || plaidSync.isError
+  const isSyncPending  = importTx.isPending || plaidSync.isPending
+  const lastSyncedAt   = getLastSyncedAt(accounts)
 
   return (
     <div className="pb-24 lg:pb-8">
       <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div>
           <h1 className="page-title">Transactions</h1>
-          {isSyncing && <span className="text-xs text-muted">Syncing…</span>}
+          {hasLinked && lastSyncedAt && (
+            <p className="text-xs text-muted mt-0.5">
+              Synced {formatDistanceToNowStrict(parseISO(lastSyncedAt), { addSuffix: true })}
+            </p>
+          )}
         </div>
         {hasLinked && (
           <button
-            onClick={() => importTx.mutate()}
-            disabled={importTx.isPending}
+            onClick={() => { importTx.mutate(); plaidSync.mutate() }}
+            disabled={isSyncPending}
             className={`btn-ghost text-xs gap-1.5 ${syncError ? 'text-danger' : ''}`}
             title={syncError ? 'Sync failed — tap to retry' : undefined}
           >
             <svg
               width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              className={importTx.isPending ? 'animate-spin' : ''}
+              className={isSyncPending ? 'animate-spin' : ''}
             >
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
-            {importTx.isPending ? 'Syncing…' : syncError ? 'Sync failed' : 'Sync'}
+            {isSyncPending ? 'Syncing…' : syncError ? 'Retry' : 'Sync'}
           </button>
         )}
       </div>

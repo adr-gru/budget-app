@@ -60,7 +60,9 @@ function ContributionLog({
       </div>
 
       {isLoading ? (
-        <p className="text-xs text-muted">Loading…</p>
+        <div className="flex flex-col gap-1.5">
+          {[0,1,2].map(i => <Skeleton key={i} className="h-5 rounded" />)}
+        </div>
       ) : contributions.length === 0 ? (
         <p className="text-xs text-muted">No contributions yet.</p>
       ) : (
@@ -259,7 +261,7 @@ function GoalCard({
 }
 
 export function Goals() {
-  const { data: goals = [], isLoading } = useGoals()
+  const { data: goals = [], isLoading, isError } = useGoals()
   const { data: accounts = [] }         = useAccounts()
   const { data: latestBalances = [] }   = useLatestBalances()
   const deleteGoal = useDeleteGoal()
@@ -287,6 +289,11 @@ export function Goals() {
       {isLoading ? (
         <div className="px-4 lg:px-6 pt-5 flex flex-col gap-3">
           {[0,1,2].map(i => <Skeleton key={i} className="h-32 rounded-lg" />)}
+        </div>
+      ) : isError ? (
+        <div className="px-4 lg:px-6 pt-8 flex flex-col items-center text-center">
+          <p className="text-sm text-danger font-medium mb-1">Failed to load goals</p>
+          <p className="text-xs text-muted">Check your connection and reload the page.</p>
         </div>
       ) : goals.length === 0 ? (
         <div className="px-4 lg:px-6 pt-12 flex flex-col items-center text-center">

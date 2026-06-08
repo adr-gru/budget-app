@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { Sheet } from './Sheet'
+import { Skeleton } from './Skeleton'
 import { supabase } from '../lib/supabase'
 import { BUCKET_META } from '../lib/buckets'
 import { formatMoney } from '../lib/money'
@@ -18,7 +19,7 @@ export function BucketDetailSheet({ bucket, cycleStart, cycleEnd, subscriptions,
   const cycleStartStr = format(cycleStart, 'yyyy-MM-dd')
   const cycleEndStr   = format(cycleEnd, 'yyyy-MM-dd')
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions', 'bucket-detail', bucket, cycleStartStr],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -49,13 +50,19 @@ export function BucketDetailSheet({ bucket, cycleStart, cycleEnd, subscriptions,
   return (
     <Sheet onClose={onClose} title={meta.label} maxHeight="85vh">
       <div className="px-5 pb-5">
-        <p className="text-xs text-muted mb-4 font-mono tabular-nums">
-          {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
-          {' · '}
-          {bucketSubs.length} subscription{bucketSubs.length !== 1 ? 's' : ''}
-          {' · total: '}
-          {formatMoney(grandTotal)}
-        </p>
+        {isLoading ? (
+          <div className="flex flex-col gap-2.5 pt-1">
+            {[0,1,2,3].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-muted mb-4 font-mono tabular-nums">
+              {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
+              {' · '}
+              {bucketSubs.length} subscription{bucketSubs.length !== 1 ? 's' : ''}
+              {' · total: '}
+              {formatMoney(grandTotal)}
+            </p>
 
         {transactions.length === 0 && bucketSubs.length === 0 && (
           <p className="text-sm text-muted text-center py-6">No activity this cycle</p>
@@ -95,6 +102,8 @@ export function BucketDetailSheet({ bucket, cycleStart, cycleEnd, subscriptions,
                 </div>
               ))}
             </div>
+          </>
+        )}
           </>
         )}
       </div>

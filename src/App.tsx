@@ -20,9 +20,11 @@ import { queryClient } from './lib/queryClient'
 import { isSupabaseConfigured } from './lib/supabase'
 import { useProfile } from './data/profile'
 import { useAutoLogout } from './hooks/useAutoLogout'
+import { useAutoSync } from './hooks/useAutoSync'
 import { usePushRegistration } from './hooks/usePushRegistration'
 import { useBiometricLock } from './hooks/useBiometricLock'
 import { BiometricLock } from './components/BiometricLock'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { isNative } from './lib/native'
 
 // Dynamic import — only resolves on native, never throws on web
@@ -40,6 +42,7 @@ function AuthenticatedApp() {
   const { data: profile, isLoading } = useProfile()
   const { locked, unlock } = useBiometricLock()
   useAutoLogout()
+  useAutoSync()
   usePushRegistration()
 
   useEffect(() => {
@@ -136,12 +139,14 @@ export default function App() {
   if (!isSupabaseConfigured) return <SetupScreen />
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }

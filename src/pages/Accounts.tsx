@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAccounts, useAddAccount, useUpdateAccount, useDeleteAccount } from '../data/accounts'
+import { useAccounts, useAddAccount, useUpdateAccount, useDeleteAccount, getLastSyncedAt } from '../data/accounts'
 import {
   usePlaidSync,
   usePlaidExchange,
@@ -19,6 +19,7 @@ import { Sheet } from '../components/Sheet'
 import { Skeleton } from '../components/Skeleton'
 import { currentCycleStart, todayISO } from '../lib/cycle'
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_META, isLinked } from '../lib/accountTypes'
+import { formatDistanceToNowStrict, parseISO } from 'date-fns'
 import { formatMoney, parseCents } from '../lib/money'
 import type { Account, AccountType } from '../lib/supabase'
 import type { PlaidLinkAccount } from '../lib/plaid.d'
@@ -58,10 +59,19 @@ export function Accounts() {
     return acc
   }, {} as Record<AccountType, Account[]>)
 
+  const lastSyncedAt = getLastSyncedAt(accounts)
+
   return (
     <div className="pb-24 lg:pb-8">
       <div className="px-4 lg:px-6 pt-6 lg:pt-8 pb-4 border-b border-border flex items-center justify-between">
-        <h1 className="page-title">Accounts</h1>
+        <div>
+          <h1 className="page-title">Accounts</h1>
+          {hasLinked && lastSyncedAt && (
+            <p className="text-xs text-muted mt-0.5">
+              Synced {formatDistanceToNowStrict(parseISO(lastSyncedAt), { addSuffix: true })}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {hasLinked && (
             <button
@@ -79,7 +89,7 @@ export function Accounts() {
                 <polyline points="23 4 23 10 17 10"/>
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
               </svg>
-              {plaidSync.isPending ? 'Syncing…' : plaidSync.isError ? 'Sync failed' : 'Sync'}
+              {plaidSync.isPending ? 'Syncing…' : plaidSync.isError ? 'Retry' : 'Sync'}
             </button>
           )}
           <button onClick={() => setShowManage(true)} className="btn text-sm">

@@ -118,7 +118,7 @@ export function Dashboard() {
   const cycleEnd_  = cycleEnd(cycleStart)
   const { data: activitySnapshots = [] } = useCycleActivitySnapshots(cycleStart)
 
-  const { data: txBuckets } = useCycleTransactionBuckets(
+  const { data: txBuckets, isLoading: bucketsLoading } = useCycleTransactionBuckets(
     format(cycleStart, 'yyyy-MM-dd'),
     format(cycleEnd_, 'yyyy-MM-dd')
   )
@@ -337,6 +337,11 @@ export function Dashboard() {
             <p className="section-label">Budget</p>
             <span className="text-xs font-mono text-muted tabular-nums">{formatMoney(profile.paycheck_cents)}/paycheck</span>
           </div>
+          {bucketsLoading ? (
+            <div className="flex flex-col gap-2">
+              {[0,1,2].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}
+            </div>
+          ) : (
           <div className="flex flex-col gap-2">
             {BUCKETS.map(b => (
               <BucketCard
@@ -349,22 +354,27 @@ export function Dashboard() {
               />
             ))}
           </div>
-          <p className="text-xs text-muted mt-2">
-            {usingTransactions
-              ? 'Actuals from synced transactions this pay period.'
-              : 'Actuals reflect subscriptions due this pay period.'}
-          </p>
-          {usingTransactions && uncategorizedCount > 0 && (
-            <button
-              onClick={() => navigate('/transactions')}
-              className="mt-2 flex items-center gap-1.5 text-xs text-warning font-medium hover:text-warning/80 transition-colors"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-              {uncategorizedCount} uncategorized transaction{uncategorizedCount !== 1 ? 's' : ''} this cycle →
-            </button>
+          )}
+          {!bucketsLoading && (
+            <>
+              <p className="text-xs text-muted mt-2">
+                {usingTransactions
+                  ? 'Actuals from synced transactions this pay period.'
+                  : 'Actuals reflect subscriptions due this pay period.'}
+              </p>
+              {usingTransactions && uncategorizedCount > 0 && (
+                <button
+                  onClick={() => navigate('/transactions')}
+                  className="mt-2 flex items-center gap-1.5 text-xs text-warning font-medium hover:text-warning/80 transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  {uncategorizedCount} uncategorized transaction{uncategorizedCount !== 1 ? 's' : ''} this cycle →
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
