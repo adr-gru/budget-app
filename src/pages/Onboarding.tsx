@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useUpsertProfile } from '../data/profile'
-import { parseCents, formatMoney } from '../lib/money'
+import { parseCents } from '../lib/money'
 import { todayISO } from '../lib/cycle'
+import { BudgetAllocationForm } from '../components/BudgetAllocationForm'
 
 const TOTAL_STEPS = 4
 
@@ -31,12 +32,6 @@ export function Onboarding() {
 
   const totalPct = Number(needsPct || 0) + Number(wantsPct || 0) + Number(savingsPct || 0)
   const paycheckCents = parseCents(paycheck)
-
-  function bucketAmount(pct: string) {
-    if (!paycheckCents) return ''
-    const cents = Math.round(paycheckCents * Number(pct || 0) / 100)
-    return formatMoney(cents)
-  }
 
   async function finish() {
     await upsert.mutateAsync({
@@ -123,36 +118,15 @@ export function Onboarding() {
             The 50/30/20 rule is a great starting point. Adjust to fit your life.
           </p>
 
-          <div className="card px-4 py-0 mb-4">
-            {[
-              { label: 'Needs',   hint: 'Housing, food, essentials',     value: needsPct,   set: setNeedsPct,   color: '#3B82F6' },
-              { label: 'Wants',   hint: 'Entertainment, subscriptions',  value: wantsPct,   set: setWantsPct,   color: '#8B5CF6' },
-              { label: 'Savings', hint: 'Savings & investments',         value: savingsPct, set: setSavingsPct, color: '#16A34A' }
-            ].map(({ label, hint, value, set, color }) => (
-              <div key={label} className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text">{label}</p>
-                  <p className="text-xs text-muted mt-0.5">
-                    {hint}
-                    {paycheckCents > 0 && (
-                      <span style={{ color }} className="ml-1.5 font-mono tabular-nums">→ {bucketAmount(value)}</span>
-                    )}
-                  </p>
-                </div>
-                <div className="relative w-20">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    step="1" min="0" max="100"
-                    value={value}
-                    onChange={e => set(e.target.value)}
-                    className="field text-right pr-6 font-mono tabular-nums text-sm"
-                  />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">%</span>
-                </div>
-              </div>
-            ))}
+          <div className="mb-4">
+            <BudgetAllocationForm
+              needs={needsPct} wants={wantsPct} savings={savingsPct}
+              onNeedsChange={setNeedsPct}
+              onWantsChange={setWantsPct}
+              onSavingsChange={setSavingsPct}
+              paycheckCents={paycheckCents > 0 ? paycheckCents : undefined}
+              showColors
+            />
           </div>
 
           <p className={`font-mono text-xs text-center mb-8 font-semibold tabular-nums ${totalPct === 100 ? 'text-success' : 'text-danger'}`}>

@@ -68,6 +68,7 @@ export function Transactions() {
 
   const [editing,       setEditing]       = useState<Transaction | null>(null)
   const [pendingRule,   setPendingRule]   = useState<PendingRule | null>(null)
+  const [ruleResult,    setRuleResult]    = useState<number | null>(null)
 
   const [search,        setSearch]        = useState('')
   const [bucketFilter,  setBucketFilter]  = useState<TransactionBucket | 'all'>('all')
@@ -140,9 +141,12 @@ export function Transactions() {
 
   async function applyRule() {
     if (!pendingRule) return
-    await addRule.mutateAsync({ merchant_pattern: pendingRule.merchantName, bucket: pendingRule.bucket })
+    const { merchantName, bucket } = pendingRule
+    await addRule.mutateAsync({ merchant_pattern: merchantName, bucket })
     setPendingRule(null)
-    await applyRulesToTransactions([...rules, { id: '', user_id: '', created_at: '', merchant_pattern: pendingRule.merchantName, bucket: pendingRule.bucket }])
+    const count = await applyRulesToTransactions([...rules, { id: '', user_id: '', created_at: '', merchant_pattern: merchantName, bucket }])
+    setRuleResult(count)
+    setTimeout(() => setRuleResult(null), 3000)
   }
 
   const showFilters    = !isLoading && transactions.length > 0
@@ -348,6 +352,16 @@ export function Transactions() {
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
+            </div>
+          )}
+
+          {ruleResult !== null && (
+            <div className="mx-4 lg:mx-6 mt-4 px-4 py-2.5 bg-success/10 rounded-lg border border-success/20 mb-2">
+              <p className="text-sm text-success font-medium">
+                {ruleResult > 0
+                  ? `Rule applied — ${ruleResult} transaction${ruleResult !== 1 ? 's' : ''} updated`
+                  : 'Rule saved — no uncategorized transactions matched'}
+              </p>
             </div>
           )}
 

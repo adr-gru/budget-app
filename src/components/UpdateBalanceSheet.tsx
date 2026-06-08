@@ -6,6 +6,7 @@ import { useUpdateBalance } from '../data/snapshots'
 import { useUpdateAccount, useDeleteAccount } from '../data/accounts'
 import { Sheet } from './Sheet'
 import { ConfirmSheet } from './ConfirmSheet'
+import { CreditCardFields } from './CreditCardFields'
 
 interface Props {
   account: Account
@@ -92,27 +93,10 @@ export function UpdateBalanceSheet({ account, currentBalance, onClose }: Props) 
           </div>
 
           {account.type === 'credit_card' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted block mb-1.5">Credit limit</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
-                  <input
-                    type="number" inputMode="decimal" step="0.01" min="0"
-                    value={limitValue} onChange={e => setLimitValue(e.target.value)}
-                    placeholder="0.00" className="field pl-7"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted block mb-1.5">Due day</label>
-                <input
-                  type="number" inputMode="numeric" min="1" max="31"
-                  value={dueDay} onChange={e => setDueDay(e.target.value)}
-                  placeholder="e.g. 15" className="field"
-                />
-              </div>
-            </div>
+            <CreditCardFields
+              limitValue={limitValue} dueDay={dueDay}
+              onLimitChange={setLimitValue} onDueChange={setDueDay}
+            />
           )}
 
           <button type="submit" disabled={isPending || !name.trim()} className="btn-primary py-3">

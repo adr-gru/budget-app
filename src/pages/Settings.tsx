@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useProfile, useUpsertProfile } from '../data/profile'
 import { useAccounts } from '../data/accounts'
 import { useSubscriptions } from '../data/subscriptions'
@@ -15,47 +15,8 @@ import { format, parseISO, addDays } from 'date-fns'
 import type { BalanceSnapshot, GoalContribution, EmailDigestSections } from '../lib/supabase'
 import { getTheme, setTheme, type Theme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
-
-function NumberField({
-  label, hint, value, onSave, prefix, suffix,
-  min, max, step = '0.01', placeholder
-}: {
-  label: string; hint?: string; value: string
-  onSave: (raw: string) => void
-  prefix?: string; suffix?: string
-  min?: string; max?: string; step?: string; placeholder?: string
-}) {
-  const [local, setLocal] = useState(value)
-  const focusRef = useRef(false)
-
-  useEffect(() => { if (!focusRef.current) setLocal(value) }, [value])
-
-  return (
-    <div className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-text">{label}</p>
-        {hint && <p className="font-mono text-xs text-muted mt-0.5 tabular-nums">{hint}</p>}
-      </div>
-      <div className="relative w-32 flex-shrink-0">
-        {prefix && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">{prefix}</span>}
-        <input
-          type="number"
-          inputMode="decimal"
-          step={step}
-          min={min}
-          max={max}
-          value={local}
-          onChange={e => setLocal(e.target.value)}
-          onFocus={() => { focusRef.current = true }}
-          onBlur={() => { focusRef.current = false; if (local !== value) onSave(local) }}
-          placeholder={placeholder ?? '0'}
-          className={`field text-right font-mono tabular-nums text-sm ${prefix ? 'pl-6' : ''} ${suffix ? 'pr-6' : ''}`}
-        />
-        {suffix && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">{suffix}</span>}
-      </div>
-    </div>
-  )
-}
+import { NumberField } from '../components/NumberField'
+import { BudgetAllocationForm } from '../components/BudgetAllocationForm'
 
 function AllContributionsExport({ goals }: { goals: ReturnType<typeof useGoals>['data'] & object[] }) {
   const typedGoals = (goals ?? []) as import('../lib/supabase').Goal[]
@@ -285,6 +246,8 @@ function EmailDigestSection() {
   const [sections,    setSections]    = useState<EmailDigestSections>(DEFAULT_SECTIONS)
   const [emailInput,  setEmailInput]  = useState('')
   const [emailError,  setEmailError]  = useState<string | null>(null)
+  const [testSending, setTestSending] = useState(false)
+  const [testStatus,  setTestStatus]  = useState<'sent' | 'error' | null>(null)
   const initialized = useRef(false)
 
   useEffect(() => {
@@ -327,6 +290,20 @@ function EmailDigestSection() {
     const next = recipients.filter(r => r !== email)
     setRecipients(next)
     persist({ recipients: next })
+  }
+
+  async function sendTestEmail() {
+    setTestSending(true)
+    setTestStatus(null)
+    try {
+      const { error } = await supabase.functions.invoke('email-digest?force=true', { body: {} })
+      setTestStatus(error ? 'error' : 'sent')
+    } catch {
+      setTestStatus('error')
+    } finally {
+      setTestSending(false)
+      setTimeout(() => setTestStatus(null), 4000)
+    }
   }
 
   const hourOptions = Array.from({ length: 24 }, (_, i) => ({ localH: i, label: formatLocalHour(i) }))
@@ -509,6 +486,25 @@ function EmailDigestSection() {
               </div>
             )}
 
+            {/* Test send */}
+            <div className="py-3.5 flex items-center justify-between border-b border-border">
+              <div>
+                <p className="text-sm text-text">Test email</p>
+                <p className="text-xs text-muted mt-0.5">Send a digest to all recipients now</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {testStatus === 'sent'  && <span className="text-xs text-success font-medium">Sent!</span>}
+                {testStatus === 'error' && <span className="text-xs text-danger  font-medium">Failed</span>}
+                <button
+                  onClick={sendTestEmail}
+                  disabled={testSending || recipients.length === 0}
+                  className="btn text-xs disabled:opacity-50"
+                >
+                  {testSending ? 'Sending…' : 'Send test'}
+                </button>
+              </div>
+            </div>
+
             {/* Last sent */}
             {lastSentText && (
               <div className="py-3">
@@ -640,34 +636,12 @@ export function Settings() {
             </span>
           </div>
         </div>
-        <div className="card px-4 py-0">
-          {([
-            { label: 'Needs',   hint: 'Housing, food, essentials',    value: localNeeds,   set: setLocalNeeds,   placeholder: '50' },
-            { label: 'Wants',   hint: 'Entertainment, subscriptions', value: localWants,   set: setLocalWants,   placeholder: '30' },
-            { label: 'Savings', hint: 'Savings & investments',        value: localSavings, set: setLocalSavings, placeholder: '20' },
-          ] as const).map(({ label, hint, value, set, placeholder }) => (
-            <div key={label} className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-text">{label}</p>
-                <p className="font-mono text-xs text-muted mt-0.5 tabular-nums">{hint}</p>
-              </div>
-              <div className="relative w-24 flex-shrink-0">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="1"
-                  min="0"
-                  max="100"
-                  value={value}
-                  onChange={e => { set(e.target.value); setBucketError(null) }}
-                  placeholder={placeholder}
-                  className="field text-right font-mono tabular-nums text-sm pr-6"
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted text-xs">%</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <BudgetAllocationForm
+          needs={localNeeds} wants={localWants} savings={localSavings}
+          onNeedsChange={v => { setLocalNeeds(v); setBucketError(null) }}
+          onWantsChange={v => { setLocalWants(v); setBucketError(null) }}
+          onSavingsChange={v => { setLocalSavings(v); setBucketError(null) }}
+        />
         {bucketError && <p className="text-xs text-danger mt-2 px-1">{bucketError}</p>}
         {bucketsDirty && (
           <button

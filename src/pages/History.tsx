@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useProfile } from '../data/profile'
 import { useAccounts } from '../data/accounts'
 import { computeActivity } from '../data/snapshots'
+import { useCycleTransactionBuckets } from '../data/transactions'
 import type { Account, BalanceSnapshot } from '../lib/supabase'
 import { currentCycleStart, cycleEnd, cycleLabel, cycleKey, prevCycle, todayISO } from '../lib/cycle'
 import { ACCOUNT_TYPE_META } from '../lib/accountTypes'
@@ -13,6 +14,50 @@ import { Skeleton } from '../components/Skeleton'
 import { NetWorthChart } from '../components/NetWorthChart'
 
 const CYCLES_TO_SHOW = 10
+
+const BUCKET_CHIPS = [
+  { key: 'needs'         as const, label: 'Needs',   color: '#3B82F6' },
+  { key: 'wants'         as const, label: 'Wants',   color: '#8B5CF6' },
+  { key: 'savings'       as const, label: 'Savings', color: '#16A34A' },
+  { key: 'uncategorized' as const, label: 'Uncat.',  color: '#6B7280' },
+]
+
+function CycleBuckets({ cycleStart }: { cycleStart: Date }) {
+  const startStr = format(cycleStart, 'yyyy-MM-dd')
+  const endStr   = format(cycleEnd(cycleStart), 'yyyy-MM-dd')
+  const { data, isLoading } = useCycleTransactionBuckets(startStr, endStr)
+
+  if (isLoading) {
+    return (
+      <div className="mt-3 flex gap-2">
+        <Skeleton className="h-7 w-20 rounded-lg" />
+        <Skeleton className="h-7 w-20 rounded-lg" />
+        <Skeleton className="h-7 w-20 rounded-lg" />
+      </div>
+    )
+  }
+
+  const active = BUCKET_CHIPS.filter(b => data && data[b.key] > 0)
+  if (!data || active.length === 0) {
+    return <p className="text-xs text-muted mt-3">No transactions categorized this period.</p>
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {active.map(b => (
+        <div
+          key={b.key}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+          style={{ background: `${b.color}14` }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: b.color }} />
+          <span className="text-xs font-medium" style={{ color: b.color }}>{b.label}</span>
+          <span className="font-mono text-xs tabular-nums" style={{ color: b.color }}>{formatMoney(data[b.key])}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function usePastSnapshots(anchor: string) {
   const cycleStart = currentCycleStart(anchor)
@@ -211,6 +256,7 @@ export function History() {
                       }
                     </div>
                   )}
+                  <CycleBuckets cycleStart={cycleStart} />
                 </div>
               )}
             </div>
