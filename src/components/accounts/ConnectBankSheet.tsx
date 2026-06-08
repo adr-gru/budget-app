@@ -36,7 +36,7 @@ export function ConnectBankSheet({ account, onClose }: { account: Account; onClo
       const linkToken = await getLinkToken(account.plaid_item_id ?? undefined)
       const handler = window.Plaid.create({
         token: linkToken,
-        onSuccess: async (publicTkn: string, metadata: { institution?: { name?: string }; accounts: { id: string; name: string; subtype: string; mask: string | null }[] }) => {
+        onSuccess: async (publicTkn: string, metadata: { institution: { name: string; institution_id: string } | null; accounts: { id: string; name: string; subtype: string; mask: string | null }[] }) => {
           if (isReconnect) {
             try {
               await exchange.mutateAsync({

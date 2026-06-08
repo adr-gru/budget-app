@@ -81,7 +81,7 @@ export function AddAccountSheet({ onClose }: { onClose: () => void }) {
       const linkToken = await getLinkToken()
       const handler = window.Plaid.create({
         token: linkToken,
-        onSuccess: (publicTkn: string, metadata: { institution?: { name?: string }; accounts: { id: string; name: string; type: string; subtype: string; mask: string | null }[] }) => {
+        onSuccess: (publicTkn: string, metadata: { institution: { name: string; institution_id: string } | null; accounts: { id: string; name: string; type: string; subtype: string; mask: string | null }[] }) => {
           setPublicToken(publicTkn)
           setInstitutionName(metadata.institution?.name ?? null)
           setPlaidAccts(metadata.accounts)
