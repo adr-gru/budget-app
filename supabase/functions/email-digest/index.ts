@@ -16,6 +16,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 const supabaseUrl    = Deno.env.get('SUPABASE_URL')!
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const resendApiKey   = Deno.env.get('RESEND_API_KEY')!
@@ -360,6 +365,7 @@ async function buildHtml(userId: string, row: DigestRow, now: Date): Promise<str
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
   const url        = new URL(req.url)
@@ -379,7 +385,7 @@ Deno.serve(async (req) => {
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'content-type': 'application/json' }
+      headers: { ...corsHeaders, 'content-type': 'application/json' }
     })
   }
 
@@ -430,6 +436,6 @@ Deno.serve(async (req) => {
 
   return new Response(
     JSON.stringify({ sent, evaluated: allSettings?.length ?? 0, qualifying: qualifying.length }),
-    { headers: { 'content-type': 'application/json' } }
+    { headers: { ...corsHeaders, 'content-type': 'application/json' } }
   )
 })
